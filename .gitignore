@@ -1,0 +1,57 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Environment files — never commit real credentials.
+.env
+.env.*
+.env *
+!.env.example
+
+# Human-only scratch notes (local workflow; not for the repo).
+mynotes.md
+
+# Local config overrides that may embed hosts, users, or paths.
+*.local.toml
+config.local.toml
+
+# Generated pipeline artifacts (can be very large; never commit).
+outputs/
+data/
+logs/
+
+# Local secrets, credentials, and machine-specific state.
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+credentials.json
+client_secret*.json
+secrets.json
+secrets.toml
+*.token
+*.secret
+.netrc
+
+# Editor, OS, and tool caches
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.log

@@ -1,0 +1,41 @@
+[run]
+version = "toy"
+source = "csv"
+input_path = "tests/data/toy_prices.csv"
+symbols = ["AAPL", "MSFT"]
+start_date = "2024-01-02"
+end_date = "2024-01-03"
+output_formats = ["csv", "parquet"]
+output_dir = "outputs/toy"
+
+[data_quality]
+drop_missing_numeric_values = true
+drop_zero_prices = true
+drop_high_lt_low = true
+drop_ohlc_violations = true
+
+[features]
+include_categories = []
+exclude_categories = []
+
+[[features.params]]
+name = "log_return"
+fn = "log_return"
+enabled = true
+
+[[features.params]]
+name = "ma_2"
+fn = "moving_average"
+window = 2
+enabled = true
+
+[[features.params]]
+name = "bar_range_pct"
+fn = "bar_range_pct"
+enabled = true
+
+[[features.params]]
+name = "volume_ratio_2"
+fn = "volume_ratio"
+window = 2
+enabled = true

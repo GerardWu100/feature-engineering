@@ -1,0 +1,119 @@
+# Simple stock OHLCV feature engineering configuration.
+# Run: uv run python run.py --config config.toml
+
+[run]
+# Pipeline version stamped into output filenames.
+version = "1.0.0"
+
+# Data source: "clickhouse" for database runs, "csv" for local files.
+source = "clickhouse"
+
+# ClickHouse table inside the firstrate database when source = "clickhouse".
+table = "stocks"
+
+# Optional local CSV path when source = "csv".
+# input_path = "data/raw/prices.csv"
+
+# Symbols are processed independently so rolling features never mix tickers.
+symbols = ["AAPL", "MSFT"]
+
+# Inclusive date range in YYYY-MM-DD format.
+start_date = "2023-01-01"
+end_date = "2024-12-31"
+
+# Session filter for ClickHouse source: "rth", "extended", or "full".
+session = "rth"
+
+# Output formats: "parquet" and/or "csv".
+output_formats = ["parquet", "csv"]
+
+# Directory for generated feature outputs.
+output_dir = "outputs/stocks"
+
+[data_quality]
+# Drop bars where open, high, low, close, or volume is missing after parsing.
+drop_missing_numeric_values = true
+
+# Drop bars where open, high, low, or close is zero or negative.
+drop_zero_prices = true
+
+# Drop bars where high is below low.
+drop_high_lt_low = true
+
+# Drop bars where open or close sits outside the low-high range.
+drop_ohlc_violations = true
+
+[features]
+# Keep this empty to allow every enabled feature.
+include_categories = []
+
+# Exclude forward-looking targets from live feature sets by default.
+exclude_categories = ["target"]
+
+# Categories:
+# - returns: price change features
+# - trend: direction and momentum features
+# - volatility: price movement size and instability
+# - volume: trading activity and liquidity features
+# - target: forward-looking labels for supervised learning
+
+[[features.params]]
+name = "log_return"
+fn = "log_return"
+enabled = true
+
+[[features.params]]
+name = "simple_return"
+fn = "simple_return"
+enabled = true
+
+[[features.params]]
+name = "next_1d_return"
+fn = "next_n_day_return"
+days = 1
+enabled = true
+
+[[features.params]]
+name = "ma_20"
+fn = "moving_average"
+window = 20
+enabled = true
+
+[[features.params]]
+name = "price_vs_sma_20"
+fn = "price_vs_sma"
+window = 20
+enabled = true
+
+[[features.params]]
+name = "roc_20"
+fn = "rate_of_change"
+periods = 20
+enabled = true
+
+[[features.params]]
+name = "rolling_std_20"
+fn = "rolling_std"
+window = 20
+enabled = true
+
+[[features.params]]
+name = "bar_range_pct"
+fn = "bar_range_pct"
+enabled = true
+
+[[features.params]]
+name = "volume_ratio_20"
+fn = "volume_ratio"
+window = 20
+enabled = true
+
+[[features.params]]
+name = "dollar_volume"
+fn = "dollar_volume"
+enabled = true
+
+[[features.params]]
+name = "volume_change"
+fn = "volume_change"
+enabled = true

@@ -1,0 +1,49 @@
+[project]
+name = "feature-engineering"
+version = "0.1.0"
+description = "Simple categorized feature engineering pipeline for stock OHLCV data"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "clickhouse-connect>=0.13.0",
+    "numpy<2",
+    "pandas>=3.0.1",
+    "pyarrow>=23.0.1",
+    "python-dotenv>=1.2.1",
+    "ruff>=0.15.6",
+    "setuptools>=82.0.0",
+]
+
+[project.scripts]
+feature-engineering = "main:main"
+feature-pipeline = "feature_engineering.pipeline.cli:main"
+
+[build-system]
+requires = ["setuptools>=82.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["main", "run"]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "feature_engineering*",
+]
+exclude = [
+    "outputs*",
+    "*.outputs*",
+    "*.models*",
+]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.6",
+]
