@@ -475,7 +475,9 @@ class OnlineFeatureEngine:
 
         # Blueprint: (column_name, factory, params). Built once; used to spin up
         # fresh accumulators per symbol (and per session when resetting).
-        self._blueprints: list[tuple[str, Callable[[dict[str, Any]], OnlineFeature], dict[str, Any]]] = []
+        self._blueprints: list[
+            tuple[str, Callable[[dict[str, Any]], OnlineFeature], dict[str, Any]]
+        ] = []
         for feature_item in _selected_feature_configs(config):
             column_name, spec, params = _resolve_feature(feature_item)
             function_name = feature_item["fn"]

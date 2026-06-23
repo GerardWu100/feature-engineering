@@ -133,9 +133,9 @@ def average_true_range(df: pd.DataFrame, params: dict) -> pd.Series:
     high_low_range = high - low
     high_close_gap = (high - previous_close).abs()
     low_close_gap = (low - previous_close).abs()
-    true_range = pd.concat(
-        [high_low_range, high_close_gap, low_close_gap], axis=1
-    ).max(axis=1)
+    true_range = pd.concat([high_low_range, high_close_gap, low_close_gap], axis=1).max(
+        axis=1
+    )
 
     # Wilder smoothing (EMA with alpha = 1 / window). true_range has no NaN, so
     # the recursion seeds on the first bar and matches the online accumulator.

@@ -32,8 +32,20 @@ ALL_ONLINE_FEATURES = {
             {"name": "rsi_14", "fn": "relative_strength_index", "window": 14},
             {"name": "atr_10", "fn": "average_true_range", "window": 10},
             {"name": "macd", "fn": "macd_line", "fast": 4, "slow": 8},
-            {"name": "macd_sig", "fn": "macd_signal", "fast": 4, "slow": 8, "signal": 3},
-            {"name": "macd_hist", "fn": "macd_histogram", "fast": 4, "slow": 8, "signal": 3},
+            {
+                "name": "macd_sig",
+                "fn": "macd_signal",
+                "fast": 4,
+                "slow": 8,
+                "signal": 3,
+            },
+            {
+                "name": "macd_hist",
+                "fn": "macd_histogram",
+                "fast": 4,
+                "slow": 8,
+                "signal": 3,
+            },
             {"name": "vwap", "fn": "vwap"},
             {"name": "price_vs_vwap", "fn": "price_vs_vwap"},
         ]
@@ -41,7 +53,9 @@ ALL_ONLINE_FEATURES = {
 }
 
 
-def _make_symbol_frame(symbol: str, n_bars: int, start_price: float, seed: int) -> pd.DataFrame:
+def _make_symbol_frame(
+    symbol: str, n_bars: int, start_price: float, seed: int
+) -> pd.DataFrame:
     """Build a deterministic single-symbol intraday OHLCV frame for one day."""
     rng = np.random.default_rng(seed)
     log_steps = rng.normal(0.0, 0.01, n_bars)
@@ -153,7 +167,13 @@ def test_macd_histogram_equals_line_minus_signal() -> None:
             "params": [
                 {"name": "line", "fn": "macd_line", "fast": 4, "slow": 8},
                 {"name": "sig", "fn": "macd_signal", "fast": 4, "slow": 8, "signal": 3},
-                {"name": "hist", "fn": "macd_histogram", "fast": 4, "slow": 8, "signal": 3},
+                {
+                    "name": "hist",
+                    "fn": "macd_histogram",
+                    "fast": 4,
+                    "slow": 8,
+                    "signal": 3,
+                },
             ]
         }
     }
@@ -191,7 +211,9 @@ def test_session_reset_resets_vwap_and_matches_online() -> None:
     # over from day one.
     first_day_two_bar = frame.iloc[10]
     expected_vwap = (
-        first_day_two_bar["high"] + first_day_two_bar["low"] + first_day_two_bar["close"]
+        first_day_two_bar["high"]
+        + first_day_two_bar["low"]
+        + first_day_two_bar["close"]
     ) / 3.0
     assert np.isclose(batch.loc[10, "vwap"], expected_vwap)
     # The 3-bar moving average also resets: row 10 has no same-day history.

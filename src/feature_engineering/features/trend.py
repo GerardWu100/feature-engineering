@@ -257,8 +257,10 @@ def macd_line(df: pd.DataFrame, params: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda params: int(params.get("slow", DEFAULT_MACD_SLOW))
-    + int(params.get("signal", DEFAULT_MACD_SIGNAL)),
+    lookback=lambda params: (
+        int(params.get("slow", DEFAULT_MACD_SLOW))
+        + int(params.get("signal", DEFAULT_MACD_SIGNAL))
+    ),
     description="MACD signal line: EMA of the MACD line.",
     calculation="EMA(MACD_line, signal)",
 )
@@ -296,8 +298,10 @@ def macd_signal(df: pd.DataFrame, params: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda params: int(params.get("slow", DEFAULT_MACD_SLOW))
-    + int(params.get("signal", DEFAULT_MACD_SIGNAL)),
+    lookback=lambda params: (
+        int(params.get("slow", DEFAULT_MACD_SLOW))
+        + int(params.get("signal", DEFAULT_MACD_SIGNAL))
+    ),
     description="MACD histogram: MACD line minus signal line.",
     calculation="MACD_line - EMA(MACD_line, signal)",
 )
