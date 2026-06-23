@@ -221,6 +221,21 @@ def _macd_line_series(close: pd.Series, fast: int, slow: int) -> pd.Series:
     return _ema(close, fast) - _ema(close, slow)
 
 
+def _macd_signal_series(
+    close: pd.Series, fast: int, slow: int, signal: int
+) -> pd.Series:
+    """Return the MACD signal line: an EMA of the MACD line.
+
+    The MACD line's leading warmup ``NaN`` rows are dropped before smoothing so
+    the signal EMA seeds on the first real MACD value, then the result is
+    reindexed back so those early rows stay ``NaN``. Both ``macd_signal`` and
+    ``macd_histogram`` go through this one helper so their signal-line math
+    cannot drift apart.
+    """
+    macd = _macd_line_series(close, fast, slow)
+    return _ema(macd.dropna(), signal).reindex(close.index)
+
+
 @register(
     category="trend",
     lookback=lambda params: int(params.get("slow", DEFAULT_MACD_SLOW)),
@@ -288,11 +303,10 @@ def macd_signal(df: pd.DataFrame, params: dict) -> pd.Series:
         raise ValueError("macd_signal requires fast < slow.")
 
     close = df["close"]
-    macd = _macd_line_series(close, fast, slow)
 
-    # Drop the MACD line's warmup NaNs so the signal EMA seeds on the first real
-    # MACD value, then reindex so those early rows stay NaN in the output.
-    signal_line = _ema(macd.dropna(), signal).reindex(close.index)
+    # Delegate the warmup-drop + reindex to the shared helper so this stays in
+    # lockstep with the histogram's signal line.
+    signal_line = _macd_signal_series(close, fast, slow, signal)
     return as_feature_column(signal_line)
 
 
@@ -328,7 +342,7 @@ def macd_histogram(df: pd.DataFrame, params: dict) -> pd.Series:
 
     close = df["close"]
     macd = _macd_line_series(close, fast, slow)
-    signal_line = _ema(macd.dropna(), signal).reindex(close.index)
+    signal_line = _macd_signal_series(close, fast, slow, signal)
 
     # The histogram is the gap between momentum (MACD line) and its own EMA.
     return as_feature_column(macd - signal_line)

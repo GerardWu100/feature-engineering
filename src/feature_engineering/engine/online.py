@@ -87,8 +87,10 @@ class _Ema:
 class _RollingSum:
     """Fixed-window running sum over a deque; O(1) per update.
 
-    Returns the current sum only once the window is full, else ``NaN`` count is
-    signalled by ``is_full``. Callers read ``.is_full`` and ``.sum`` directly.
+    ``update`` appends a value and drops the oldest once the window length is
+    exceeded; it returns nothing. Callers read the running total from ``.sum``
+    and check ``.is_full`` to know whether a complete window has accumulated
+    (a simple moving average, for example, is only valid once ``.is_full``).
     """
 
     def __init__(self, window: int) -> None:
