@@ -121,6 +121,44 @@ exclude_categories = ["target"]
 
 An empty `include_categories` list allows all enabled features. `exclude_categories` removes matching categories after the include rule.
 
+## Intraday Session Reset
+
+Rolling features use row-count windows. On intraday bars a window can otherwise
+reach back across the overnight gap (a 20-bar average at 09:30 would include the
+previous day's last bars). Enable a per-day reset so windows and forward targets
+never cross day boundaries:
+
+```toml
+[features]
+reset_by_session = true
+```
+
+Leave it `false` (the default) for daily bars, where one row already is one day.
+This relies on `ts` being in the exchange's local time (see Data Contract below).
+
+## Data Contract
+
+The loader assumes:
+
+- Prices are split- and dividend-adjusted. The pipeline does not adjust for
+  corporate actions, so unadjusted prices would turn a split into a fake return.
+- `ts` is in the exchange's local wall-clock time (US equities: US/Eastern). The
+  ClickHouse session filter and the intraday reset both rely on this.
+
+## Use As A Module
+
+The stages are importable for in-memory use inside research or trading code, with
+no file I/O:
+
+```python
+from feature_engineering import clean_ohlcv, compute_features
+
+cleaned, report = clean_ohlcv(raw_ohlcv_frame)
+features = compute_features(cleaned, config_dict)
+```
+
+`config_dict` is the same plain dict shape that `config.toml` parses into.
+
 ## Config Validation
 
 The pipeline validates `config.toml` before loading data. Important checks include:
@@ -131,7 +169,7 @@ The pipeline validates `config.toml` before loading data. Important checks inclu
 - Feature `fn` values exist in the registry.
 - Enabled feature `name` values are unique output columns.
 - Category filters use real categories and do not both include and exclude the same category.
-- Positive integer parameters such as `window`, `periods`, and `days` are at least 1.
+- Positive integer parameters such as `window`, `periods`, and `bars` are at least 1.
 
 ## Outputs
 
@@ -140,7 +178,9 @@ Outputs are written to `output_dir` from `config.toml`, for example `outputs/sto
 - `features_v{version}_{timestamp_with_microseconds}.parquet`
 - `features_v{version}_{timestamp_with_microseconds}.csv`
 - `feature_catalog.csv`
-- `run_summary_v{version}_{timestamp}.json`
+- `run_summary_v{version}_{timestamp}.json` - run timestamp, the full config
+  snapshot, rows per symbol, and per-feature health (null counts and value
+  ranges) for reproducibility and quick checks.
 
 ## Tests
 

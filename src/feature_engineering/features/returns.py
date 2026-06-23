@@ -71,45 +71,51 @@ def simple_return(df: pd.DataFrame, params: dict) -> pd.Series:
 @register(
     category="target",
     lookback=0,
-    description="Forward N-trading-day return target from the current bar close.",
-    calculation="EOD_close_{day+n} / close_t - 1",
+    description="Forward N-bar simple return target from the current bar close.",
+    calculation="close_{t+bars} / close_t - 1",
 )
-def next_n_day_return(df: pd.DataFrame, params: dict) -> pd.Series:
-    """Compute a forward day-level return target from each current bar.
+def next_n_bar_return(df: pd.DataFrame, params: dict) -> pd.Series:
+    """Compute a forward N-bar return target from each current bar.
+
+    The horizon is measured in bars (rows), not calendar days. A bar is one row
+    of the input frame: a daily bar on daily data, or a one-minute bar on
+    one-minute data. The caller controls the bar size by choosing the source
+    data and, for intraday runs, the ``reset_by_session`` option in
+    ``compute_features`` (see ``pipeline/engineer.py``), which prevents the
+    forward shift from crossing the overnight gap.
 
     Parameters
     ----------
     df
-        Single-symbol OHLCV frame with ``ts`` and ``close`` columns.
+        Single-symbol OHLCV frame with a ``close`` column, sorted by time. The
+        pipeline guarantees this ordering and per-symbol isolation, so the
+        forward shift below never reaches into another ticker's rows.
     params
-        Supports ``days`` as the positive integer forecast horizon.
+        Supports ``bars`` as the positive integer forecast horizon in rows.
+        Default is 1.
 
     Returns
     -------
     pandas.Series
         Forward return target aligned to ``df.index``. The numerator is the
-        future day-level close, and the denominator is the current row's close.
-        The final ``days`` sessions are ``NaN`` because the future close is
+        close ``bars`` rows ahead and the denominator is the current row close.
+        The final ``bars`` rows are ``NaN`` because the future close is
         unavailable.
 
     Raises
     ------
     ValueError
-        If ``days`` is less than one.
+        If ``bars`` is less than one.
     """
-    days = int(params.get("days", 1))
-    if days < 1:
-        raise ValueError("next_n_day_return requires days >= 1.")
+    bars = int(params.get("bars", 1))
+    if bars < 1:
+        raise ValueError("next_n_bar_return requires bars >= 1.")
 
-    # Normalize timestamps to calendar dates so each row can look up the close
-    # of the future session without using the current session's end close as an
-    # intraday denominator.
-    session_date = pd.to_datetime(df["ts"]).dt.tz_localize(None).dt.normalize()
-    day_close = df.groupby(session_date, sort=True)["close"].last()
-    future_day_close = day_close.shift(-days)
+    close = df["close"]
 
-    # Map each intraday row to its future session close, then divide by the
-    # current row close to produce the forward return label.
-    future_close = session_date.map(future_day_close)
-    values = future_close / df["close"] - 1.0
+    # Forward simple return over a fixed number of bars. shift(-bars) brings the
+    # future close back to the current row; the last ``bars`` rows become NaN
+    # because their future close does not exist in the frame.
+    future_close = close.shift(-bars)
+    values = future_close / close - 1.0
     return as_feature_column(values)

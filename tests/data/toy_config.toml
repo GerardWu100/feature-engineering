@@ -17,10 +17,18 @@ drop_ohlc_violations = true
 [features]
 include_categories = []
 exclude_categories = []
+# Toy data is intraday minute bars across two days, so reset windows per session.
+reset_by_session = true
 
 [[features.params]]
 name = "log_return"
 fn = "log_return"
+enabled = true
+
+[[features.params]]
+name = "next_1bar_return"
+fn = "next_n_bar_return"
+bars = 1
 enabled = true
 
 [[features.params]]

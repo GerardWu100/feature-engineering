@@ -38,3 +38,4 @@ Start with `cli.py` to understand the full run sequence.
 - 2026-05-14: Feature computation now uses an explicit per-symbol loop instead of a grouped callback so the ticker-isolation boundary is easier to audit.
 - 2026-05-14: Added a config validation stage so bad TOML inputs fail before data loading starts.
 - 2026-05-19: Centralized shared OHLCV column names and SQL identifier rules in `constants.py` so loader, cleaner, engineer, exporter, and validator read the same contract.
+- 2026-06-23: `engineer.py` gained an optional `features.reset_by_session` switch that also isolates features by calendar day, so intraday row-count windows and forward shifts do not cross the overnight gap. `export.py` run summaries now embed the full config snapshot, rows per symbol, and per-feature null/min/mean/max health. `load.py` documents the adjusted-price and exchange-local-timestamp data contract.

@@ -50,6 +50,11 @@ include_categories = []
 # Exclude forward-looking targets from live feature sets by default.
 exclude_categories = ["target"]
 
+# Reset row-count windows and forward shifts at each calendar day. Set true for
+# intraday bars so a window never crosses the overnight gap. Leave false for
+# daily bars, where one row already is one day.
+reset_by_session = false
+
 # Categories:
 # - returns: price change features
 # - trend: direction and momentum features
@@ -68,9 +73,10 @@ fn = "simple_return"
 enabled = true
 
 [[features.params]]
-name = "next_1d_return"
-fn = "next_n_day_return"
-days = 1
+name = "next_1bar_return"
+fn = "next_n_bar_return"
+# Forecast horizon in bars (rows), not calendar days.
+bars = 1
 enabled = true
 
 [[features.params]]

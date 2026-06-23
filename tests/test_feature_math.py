@@ -9,7 +9,7 @@ import pandas as pd
 
 from feature_engineering.features.returns import (
     log_return,
-    next_n_day_return,
+    next_n_bar_return,
     simple_return,
 )
 from feature_engineering.features.trend import (
@@ -63,17 +63,25 @@ def test_return_features_match_manual_formulas() -> None:
     assert math.isclose(simple_values.iloc[2], 103.0 / 101.0 - 1.0)
 
 
-def test_next_day_return_uses_current_bar_close_as_known_denominator() -> None:
-    """Forward day target should not use the current day's unknown end close intraday."""
+def test_next_n_bar_return_is_forward_simple_return_over_bars() -> None:
+    """Forward target should be close[t+bars]/close[t] - 1, NaN in the final bars."""
     frame = _sample_ohlcv_frame()
+    # Closes are [100, 101, 103, 104, 106].
 
-    target = next_n_day_return(frame, {"days": 1})
+    one_bar = next_n_bar_return(frame, {"bars": 1})
+    two_bar = next_n_bar_return(frame, {"bars": 2})
 
-    assert math.isclose(target.iloc[0], 106.0 / 100.0 - 1.0)
-    assert math.isclose(target.iloc[1], 106.0 / 101.0 - 1.0)
-    assert math.isclose(target.iloc[2], 106.0 / 103.0 - 1.0)
-    assert pd.isna(target.iloc[3])
-    assert pd.isna(target.iloc[4])
+    # One bar ahead: each row divided by the next close.
+    assert math.isclose(one_bar.iloc[0], 101.0 / 100.0 - 1.0)
+    assert math.isclose(one_bar.iloc[1], 103.0 / 101.0 - 1.0)
+    assert math.isclose(one_bar.iloc[3], 106.0 / 104.0 - 1.0)
+    assert pd.isna(one_bar.iloc[4])
+
+    # Two bars ahead: the final two rows have no future close.
+    assert math.isclose(two_bar.iloc[0], 103.0 / 100.0 - 1.0)
+    assert math.isclose(two_bar.iloc[2], 106.0 / 103.0 - 1.0)
+    assert pd.isna(two_bar.iloc[3])
+    assert pd.isna(two_bar.iloc[4])
 
 
 def test_trend_features_match_manual_formulas() -> None:

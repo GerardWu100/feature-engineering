@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -108,8 +109,8 @@ def test_compute_features_respects_category_filters() -> None:
                 {"name": "range", "fn": "bar_range_pct", "enabled": True},
                 {
                     "name": "next_day",
-                    "fn": "next_n_day_return",
-                    "days": 1,
+                    "fn": "next_n_bar_return",
+                    "bars": 1,
                     "enabled": True,
                 },
             ],
@@ -162,6 +163,43 @@ def test_compute_features_keeps_symbol_histories_separate() -> None:
     assert featured.loc[3, "ma_2"] == 202.0
 
 
+def test_compute_features_reset_by_session_does_not_cross_day_boundary() -> None:
+    """With reset_by_session, an intraday window must not reach into the prior day."""
+    frame = pd.DataFrame(
+        {
+            "symbol": ["AAPL", "AAPL", "AAPL", "AAPL"],
+            "ts": pd.to_datetime(
+                [
+                    "2024-01-02 09:30:00",
+                    "2024-01-02 09:31:00",
+                    "2024-01-03 09:30:00",  # first bar of the next session
+                    "2024-01-03 09:31:00",
+                ]
+            ),
+            "open": [100.0, 102.0, 200.0, 204.0],
+            "high": [101.0, 103.0, 201.0, 205.0],
+            "low": [99.0, 101.0, 199.0, 203.0],
+            "close": [100.0, 102.0, 200.0, 204.0],
+            "volume": [1000.0, 1200.0, 1500.0, 1800.0],
+        }
+    )
+    base_params = [{"name": "ma_2", "fn": "moving_average", "window": 2}]
+
+    crossing = compute_features(frame, {"features": {"params": base_params}})
+    reset = compute_features(
+        frame,
+        {"features": {"reset_by_session": True, "params": base_params}},
+    )
+
+    # Index 2 is the first bar of day two. Without a reset the window pulls in
+    # the prior day's close (102 + 200) / 2 = 151. With a reset it has no
+    # two-bar history inside the new session, so it must be NaN.
+    assert crossing.loc[2, "ma_2"] == 151.0
+    assert pd.isna(reset.loc[2, "ma_2"])
+    # The second bar of day two has a full two-bar same-day window either way.
+    assert reset.loc[3, "ma_2"] == 202.0
+
+
 def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
     """Export should write feature data plus a small readable catalog."""
     featured = pd.DataFrame(
@@ -196,3 +234,10 @@ def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
     summary = json.loads(paths["summary_json"].read_text())
     assert summary["rows"] == 1
     assert summary["features"] == ["log_return"]
+    # Reproducibility: the run timestamp and the exact config are captured.
+    assert summary["generated_at"] == timestamp_text
+    assert summary["config"]["run"]["version"] == "test"
+    assert summary["rows_per_symbol"] == {"AAPL": 1}
+    # Feature health: per-feature null counts and value range are present.
+    assert summary["feature_health"]["log_return"]["null_count"] == 0
+    assert math.isclose(summary["feature_health"]["log_return"]["max"], 0.01)

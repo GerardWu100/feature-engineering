@@ -13,7 +13,7 @@ ALLOWED_DATA_SOURCES = {"clickhouse", "csv"}
 ALLOWED_OUTPUT_FORMATS = {"csv", "parquet"}
 ALLOWED_SESSIONS = {"extended", "full", "rth"}
 REQUIRED_RUN_KEYS = {"output_dir", "output_formats", "source"}
-POSITIVE_INTEGER_FEATURE_PARAMS = {"days", "periods", "window"}
+POSITIVE_INTEGER_FEATURE_PARAMS = {"bars", "periods", "window"}
 
 
 class ConfigValidationError(ValueError):
@@ -205,6 +205,14 @@ def _validate_features_config(features_config: Any) -> None:
         label="features.exclude_categories",
     )
     _validate_category_overlap(include_categories, exclude_categories)
+
+    # Optional intraday safety switch. When true, row-count windows and forward
+    # shifts reset at each calendar day so they never cross the overnight gap.
+    if "reset_by_session" in features_config and not isinstance(
+        features_config["reset_by_session"], bool
+    ):
+        raise ConfigValidationError("features.reset_by_session must be true or false.")
+
     _validate_feature_items(features_config.get("params", []))
 
 

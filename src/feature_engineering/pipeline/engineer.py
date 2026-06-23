@@ -22,7 +22,11 @@ def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFram
     config
         Config dict containing ``features.params`` entries. Optional
         ``include_categories`` and ``exclude_categories`` lists filter features
-        by their registry category.
+        by their registry category. Optional ``features.reset_by_session``
+        (bool, default ``False``) makes row-count windows and forward shifts
+        reset at each calendar day, which prevents intraday features from
+        crossing the overnight gap. Leave it ``False`` for daily bars, where one
+        row already is one day.
 
     Returns
     -------
@@ -37,24 +41,63 @@ def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFram
     output = sorted_frame.loc[:, IDENTIFIER_COLUMNS].copy()
     selected_feature_configs = _selected_feature_configs(config)
 
+    # Choose the isolation boundary. Always isolate by symbol. When the run is
+    # intraday and asks for session resets, also isolate by calendar day so a
+    # 20-bar window at 09:30 cannot reach back into the prior session.
+    reset_by_session = bool(config.get("features", {}).get("reset_by_session", False))
+    group_keys = _feature_group_keys(sorted_frame, reset_by_session=reset_by_session)
+
     for feature_config in selected_feature_configs:
         column_name, spec, feature_params = _resolve_feature(feature_config)
-        output[column_name] = _compute_feature_series_by_symbol(
+        output[column_name] = _compute_feature_series_by_group(
             sorted_frame,
             spec=spec,
             params=feature_params,
+            group_keys=group_keys,
         )
 
     return output
 
 
-def _compute_feature_series_by_symbol(
+def _feature_group_keys(
+    frame: pd.DataFrame,
+    *,
+    reset_by_session: bool,
+) -> list[Any]:
+    """Return the groupby keys that define the feature-isolation boundary.
+
+    Parameters
+    ----------
+    frame
+        Sorted OHLCV frame.
+    reset_by_session
+        When ``True``, append a per-calendar-day key so intraday windows reset
+        each session. When ``False``, isolate by ``symbol`` only.
+
+    Returns
+    -------
+    list
+        Arguments suitable for ``frame.groupby(...)``. The session key is a
+        Series (not a column name) so it never lands in the output frame.
+    """
+    if not reset_by_session:
+        return ["symbol"]
+
+    # Calendar date of each bar in its own (exchange-local) timestamp. Grouping
+    # on this Series resets windows at midnight without adding a stored column.
+    session_date = frame["ts"].dt.normalize()
+    session_date.name = "_session_date"
+    return ["symbol", session_date]
+
+
+def _compute_feature_series_by_group(
     frame: pd.DataFrame,
     *,
     spec: FeatureSpec,
     params: dict[str, Any],
+    group_keys: list[Any],
 ) -> pd.Series:
-    """Apply one feature function independently to each symbol.
+    """Apply one feature function independently within each isolation group.
 
     Parameters
     ----------
@@ -64,29 +107,33 @@ def _compute_feature_series_by_symbol(
         Registry entry holding the concrete feature function and metadata.
     params
         Function-specific settings from one config item, such as ``window`` or
-        ``days``.
+        ``bars``.
+    group_keys
+        Groupby keys from :func:`_feature_group_keys`. ``["symbol"]`` isolates by
+        ticker; ``["symbol", session_date]`` also isolates by trading day.
 
     Returns
     -------
     pandas.Series
-        One feature column aligned to ``frame.index``. Each symbol is computed
-        in isolation so rolling windows and lags cannot cross ticker boundaries.
+        One feature column aligned to ``frame.index``. Each group is computed in
+        isolation so rolling windows and lags cannot cross ticker boundaries, or
+        day boundaries when session resets are enabled.
     """
-    values_by_symbol: list[pd.Series] = []
+    values_by_group: list[pd.Series] = []
 
-    # Compute each ticker separately. This makes the isolation rule explicit and
+    # Compute each group separately. This makes the isolation rule explicit and
     # avoids hiding the feature call behind a groupby/apply lambda.
-    for _symbol, symbol_frame in frame.groupby("symbol", sort=False):
-        symbol_values = spec.fn(symbol_frame, params)
-        values_by_symbol.append(symbol_values)
+    for _group_key, group_frame in frame.groupby(group_keys, sort=False):
+        group_values = spec.fn(group_frame, params)
+        values_by_group.append(group_values)
 
-    if not values_by_symbol:
+    if not values_by_group:
         return pd.Series(index=frame.index, dtype="float64")
 
-    # Concatenation preserves the original row labels from each symbol slice.
+    # Concatenation preserves the original row labels from each group slice.
     # Reindexing restores exact frame order even if pandas changes grouping
     # internals in a future release.
-    return pd.concat(values_by_symbol).reindex(frame.index)
+    return pd.concat(values_by_group).reindex(frame.index)
 
 
 def _selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -146,7 +193,7 @@ def _resolve_feature(
     column_name = feature_config["name"]
     spec = REGISTRY[function_name]
 
-    # Keep only function-specific settings such as ``window`` or ``days``.
+    # Keep only function-specific settings such as ``window`` or ``bars``.
     params = {
         key: value
         for key, value in feature_config.items()

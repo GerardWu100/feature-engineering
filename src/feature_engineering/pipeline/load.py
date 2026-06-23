@@ -6,6 +6,19 @@ The loader supports two sources:
     Local file loading for tests, examples, and small research runs.
 ``clickhouse``
     Database loading for the FirstRate stock table used by the original project.
+
+Data contract (assumptions every caller must satisfy)
+-----------------------------------------------------
+1. Adjusted prices. ``open``, ``high``, ``low``, and ``close`` must already be
+   split- and dividend-adjusted. This pipeline does not apply corporate-action
+   adjustments. Unadjusted prices make a split look like a large return and
+   silently corrupt every return, trend, and volatility feature.
+2. Exchange-local timestamps. ``ts`` must be in the exchange's local wall-clock
+   time (US equities: US/Eastern). The ClickHouse session filter below selects
+   regular trading hours with ``toHour(ts)``/``toMinute(ts)``, so a column
+   stored in UTC would select the wrong bars. The intraday ``reset_by_session``
+   option in ``engineer.py`` likewise groups by the local calendar date.
+3. One row per symbol per bar, with consistent bar size across the run.
 """
 
 from __future__ import annotations

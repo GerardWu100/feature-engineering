@@ -26,12 +26,12 @@ The pipeline does not contain feature math. Feature functions do not load or sav
 | Category | Meaning | Examples |
 |---|---|---|
 | `returns` | Price change over time. | `log_return`, `simple_return` |
-| `target` | Forward-looking labels for model training. | `next_n_day_return` |
+| `target` | Forward-looking labels for model training. | `next_n_bar_return` |
 | `trend` | Direction or momentum. | `moving_average`, `price_vs_sma`, `rate_of_change` |
 | `volatility` | Size and instability of price movement. | `rolling_std`, `bar_range_pct` |
 | `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change` |
 
-The `target` category should usually be excluded from live feature sets because it uses future information. For intraday rows, the forward return target uses the current bar close as the denominator, not the current day's final close.
+The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
 
 ## Inputs
 
@@ -44,7 +44,7 @@ The parsed TOML config is validated before data loading. The validator catches
 unsupported data sources, bad output formats, unknown feature functions,
 duplicate enabled output feature names, unknown category filters, category
 filter overlap, and non-positive integer parameters such as `window`, `periods`,
-and `days`.
+and `bars`.
 
 ## Outputs
 
@@ -55,7 +55,7 @@ Outputs are written to `output_dir` from `config.toml`:
 | `features_v{version}_{timestamp_with_microseconds}.parquet` | Main machine-readable feature dataset. |
 | `features_v{version}_{timestamp_with_microseconds}.csv` | Inspection-friendly feature dataset. |
 | `feature_catalog.csv` | Feature names, categories, formulas, and descriptions. |
-| `run_summary_v{version}_{timestamp}.json` | Row counts, feature list, and written paths. |
+| `run_summary_v{version}_{timestamp}.json` | Run timestamp, full config snapshot, rows per symbol, per-feature health (nulls and ranges), and written paths. |
 
 ## Important Assumptions
 
@@ -64,3 +64,5 @@ Outputs are written to `output_dir` from `config.toml`:
 - Rows are sorted by `symbol` and `ts` before feature computation.
 - Cleaning drops clearly invalid OHLCV rows: missing numeric values, non-positive prices, `high < low`, and open/close outside the low-high range.
 - Rolling windows are row-count windows in the simplified project. A 20-row moving average means the previous 20 observed bars for that symbol.
+- For intraday bars, `features.reset_by_session` also isolates features by calendar day so windows and forward shifts never cross the overnight gap.
+- Data contract: prices are assumed split- and dividend-adjusted, and `ts` is assumed to be in the exchange's local wall-clock time (US equities: US/Eastern). The ClickHouse session filter and the intraday reset both rely on the timestamp assumption.
