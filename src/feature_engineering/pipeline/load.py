@@ -17,7 +17,11 @@ from typing import Any
 import pandas as pd
 from dotenv import load_dotenv
 
-from feature_engineering.pipeline.constants import NUMERIC_OHLCV_COLUMNS, OHLCV_COLUMNS, SQL_IDENTIFIER_PATTERN
+from feature_engineering.pipeline.constants import (
+    NUMERIC_OHLCV_COLUMNS,
+    OHLCV_COLUMNS,
+    SQL_IDENTIFIER_PATTERN,
+)
 
 EXTENDED_SESSION_START_MINUTE = 4 * 60
 EXTENDED_SESSION_END_MINUTE = 19 * 60 + 59
