@@ -56,7 +56,9 @@ def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Pa
     summary = _build_run_summary(frame, paths, config=config, generated_at=timestamp)
     # default=str keeps the dump robust if a config value is a TOML date/time
     # object rather than a string.
-    summary_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(summary, indent=2, default=str), encoding="utf-8"
+    )
     paths["summary_json"] = summary_path
 
     return paths
