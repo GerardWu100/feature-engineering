@@ -20,6 +20,8 @@ The config passed to the in-memory functions is the same plain dict shape that
 exact keys and ``validate_config`` to check a config before use.
 """
 
+from feature_engineering.engine.batch import FeatureEngine
+from feature_engineering.engine.online import OnlineFeatureEngine
 from feature_engineering.features.registry import REGISTRY, FeatureSpec, register
 from feature_engineering.pipeline.clean import clean_ohlcv
 from feature_engineering.pipeline.cli import run_pipeline
@@ -36,6 +38,8 @@ __all__ = [
     "load_ohlcv",
     "clean_ohlcv",
     "compute_features",
+    "FeatureEngine",
+    "OnlineFeatureEngine",
     "export_features",
     "build_feature_catalog",
     "run_pipeline",

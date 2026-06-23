@@ -32,6 +32,7 @@ feature_engineering.features = quantitative formulas
 | `run.py` | Packaged CLI wrapper. |
 | `feature_engineering/` | Namespaced package for the project implementation. |
 | `feature_engineering/features/` | Categorized stock feature functions and registry. |
+| `feature_engineering/engine/` | Cached batch `FeatureEngine` and incremental `OnlineFeatureEngine`. |
 | `feature_engineering/pipeline/` | Config validation, load, clean, engineer, export, and CLI workflow code. |
 
 Read `feature_engineering/pipeline/cli.py` first to understand execution, then `feature_engineering/features/registry.py` to see the available features.
@@ -41,3 +42,4 @@ Read `feature_engineering/pipeline/cli.py` first to understand execution, then `
 - 2026-04-24: Replaced the old multi-subsystem package layout with two packages: `features` and `pipeline`.
 - 2026-04-26: Wrapped `features` and `pipeline` in the `feature_engineering` namespace package.
 - 2026-05-14: Added `pipeline/config.py` so config-boundary validation is separate from stage logic.
+- 2026-06-23: Added the `feature_engineering/engine/` subpackage (batch + online feature engines) for in-memory research and live-streaming use.

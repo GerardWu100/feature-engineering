@@ -30,9 +30,9 @@ Here $C_t$ is the close at the current row and $n$ is the configured horizon in 
 |---|---|
 | `registry.py` | `FeatureSpec`, `REGISTRY`, `register`, and `as_feature_column`. |
 | `returns.py` | `log_return`, `simple_return`, `next_n_bar_return`. |
-| `trend.py` | `moving_average`, `price_vs_sma`, `rate_of_change`. |
-| `volatility.py` | `rolling_std`, `bar_range_pct`. |
-| `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`. |
+| `trend.py` | `moving_average`, `price_vs_sma`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram`. |
+| `volatility.py` | `rolling_std`, `bar_range_pct`, `average_true_range`. |
+| `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap`. |
 
 Add a new feature by placing it in the matching category file and decorating it with `@register(...)`.
 
@@ -42,3 +42,4 @@ Add a new feature by placing it in the matching category file and decorating it 
 - 2026-04-26: `next_n_day_return` now uses the current bar close as the denominator to avoid intraday label leakage from the current day-end close.
 - 2026-05-19: Added `as_feature_column` so every feature returns an unnamed Series through one shared helper instead of repeating `values.name = None`.
 - 2026-06-23: Replaced `next_n_day_return` with `next_n_bar_return`, a plain forward N-bar simple return (`close[t+bars]/close[t] - 1`). The bar horizon plus the new `reset_by_session` engineer option removed the earlier hybrid intraday/daily target logic.
+- 2026-06-23: Added `relative_strength_index` and MACD (`macd_line`, `macd_signal`, `macd_histogram`) to `trend.py`, `average_true_range` to `volatility.py`, and `vwap`/`price_vs_vwap` to `volume.py`. The EMA-based ones drop warmup NaNs before smoothing (via `dropna`/`reindex`) so the recurrence seeds unambiguously and the O(1) online accumulators in `engine/online.py` reproduce them exactly.

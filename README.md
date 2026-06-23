@@ -15,11 +15,11 @@ load data -> clean invalid rows -> compute categorized features -> export files
   filters, output formats, and impossible windows fail with clear messages.
 - Cleans impossible market-data rows.
 - Computes features by category:
-  - `returns`: price change features.
-  - `trend`: direction and momentum features.
-  - `volatility`: price movement size and instability.
-  - `volume`: trading activity features.
-  - `target`: forward-looking labels for supervised learning.
+  - `returns`: price change features (log and simple returns).
+  - `trend`: direction and momentum (moving average, price vs SMA, rate of change, RSI, MACD line/signal/histogram).
+  - `volatility`: price movement size and instability (rolling return std, bar range, ATR).
+  - `volume`: trading activity (relative volume, dollar volume, volume change, VWAP, price vs VWAP).
+  - `target`: forward-looking labels for supervised learning (`next_n_bar_return`).
 - Exports feature data to Parquet and/or CSV.
 - Writes a small `feature_catalog.csv` with feature names, categories, formulas, and descriptions.
 
@@ -83,6 +83,9 @@ feature-engineering/
 │       │   ├── volatility.py
 │       │   ├── volume.py
 │       │   └── registry.py
+│       ├── engine/
+│       │   ├── batch.py
+│       │   └── online.py
 │       └── pipeline/
 │           ├── config.py
 │           ├── load.py
@@ -98,6 +101,9 @@ feature-engineering/
 1. Put the function in the matching category file under `src/feature_engineering/features/`.
 2. Decorate it with `@register(...)`.
 3. Add a `[[features.params]]` entry in `config.toml`.
+4. For live use, add an O(1) accumulator in `engine/online.py` and register it in
+   `ONLINE_FEATURE_FACTORIES`. The equivalence test then checks it against the
+   batch version.
 
 Example:
 
@@ -158,6 +164,27 @@ features = compute_features(cleaned, config_dict)
 ```
 
 `config_dict` is the same plain dict shape that `config.toml` parses into.
+
+For repeated use there are two engines that run the registered features without
+re-walking the config each call:
+
+```python
+from feature_engineering import FeatureEngine, OnlineFeatureEngine
+
+# Research / backtest: resolve the config once, transform many frames.
+engine = FeatureEngine(config_dict)
+features = engine.transform(cleaned)
+
+# Live trading: O(1) per bar. Feed one bar (dict or Series) at a time.
+live = OnlineFeatureEngine(config_dict)        # rejects forward-looking targets
+for bar in stream:                              # bar has symbol, ts, OHLCV keys
+    values = live.update(bar)                   # -> {feature_name: value}
+```
+
+The online accumulators reproduce the batch feature math exactly; an equivalence
+test in `tests/test_engines.py` enforces it. Forward-looking `target` features
+cannot be served online, so train on batch output (with the target) and serve
+live features without it.
 
 ## Config Validation
 

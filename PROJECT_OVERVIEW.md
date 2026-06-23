@@ -17,9 +17,10 @@ The implementation has one project namespace package with two main subpackages:
 | Package | Responsibility |
 |---|---|
 | `feature_engineering.features/` | Feature formulas grouped by research category. |
+| `feature_engineering.engine/` | Cached batch `FeatureEngine` and O(1) incremental `OnlineFeatureEngine`. |
 | `feature_engineering.pipeline/` | Config validation, data loading, cleaning, feature application, and export. |
 
-The pipeline does not contain feature math. Feature functions do not load or save files. This keeps responsibilities easy to trace.
+The pipeline does not contain feature math. Feature functions do not load or save files. The engines run the registered features without containing math themselves. This keeps responsibilities easy to trace.
 
 ## Feature Categories
 
@@ -27,11 +28,27 @@ The pipeline does not contain feature math. Feature functions do not load or sav
 |---|---|---|
 | `returns` | Price change over time. | `log_return`, `simple_return` |
 | `target` | Forward-looking labels for model training. | `next_n_bar_return` |
-| `trend` | Direction or momentum. | `moving_average`, `price_vs_sma`, `rate_of_change` |
-| `volatility` | Size and instability of price movement. | `rolling_std`, `bar_range_pct` |
-| `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change` |
+| `trend` | Direction or momentum. | `moving_average`, `price_vs_sma`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram` |
+| `volatility` | Size and instability of price movement. | `rolling_std`, `bar_range_pct`, `average_true_range` |
+| `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap` |
 
 The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
+
+## Feature Engines
+
+Two engines run the registered features for two usage patterns. Neither contains
+feature math; both delegate to the formulas in `features/`.
+
+| Engine | Use case | Per-update cost |
+|---|---|---|
+| `FeatureEngine` | Research / backtest. Resolve the config once, then `transform(df) -> df` repeatedly. | Vectorized recompute over the frame. |
+| `OnlineFeatureEngine` | Live trading. `update(bar) -> {feature: value}` one bar at a time. | O(1) bounded per bar. |
+
+The batch feature functions are the single source of truth for the math. The
+online accumulators are a second, speed-tuned implementation that
+`tests/test_engines.py` holds to the batch values via an equivalence test.
+`OnlineFeatureEngine` rejects forward-looking `target` features because they
+need future bars.
 
 ## Inputs
 

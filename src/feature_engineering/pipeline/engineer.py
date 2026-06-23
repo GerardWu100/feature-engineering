@@ -35,24 +35,58 @@ def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFram
         intentionally omitted from the output to keep the feature dataset small.
     """
     sorted_frame = frame.sort_values(["symbol", "ts"]).reset_index(drop=True)
-
-    # Keep identifier columns separate from computed feature columns so exports
-    # stay compact and clearly signal what each row represents.
-    output = sorted_frame.loc[:, IDENTIFIER_COLUMNS].copy()
     selected_feature_configs = _selected_feature_configs(config)
+    resolved_features = [_resolve_feature(item) for item in selected_feature_configs]
 
     # Choose the isolation boundary. Always isolate by symbol. When the run is
     # intraday and asks for session resets, also isolate by calendar day so a
     # 20-bar window at 09:30 cannot reach back into the prior session.
     reset_by_session = bool(config.get("features", {}).get("reset_by_session", False))
+
+    return apply_resolved_features(
+        sorted_frame,
+        resolved_features=resolved_features,
+        reset_by_session=reset_by_session,
+    )
+
+
+def apply_resolved_features(
+    sorted_frame: pd.DataFrame,
+    *,
+    resolved_features: list[tuple[str, FeatureSpec, dict[str, Any]]],
+    reset_by_session: bool,
+) -> pd.DataFrame:
+    """Compute already-resolved feature columns on a pre-sorted frame.
+
+    This is the shared core used by both the one-shot :func:`compute_features`
+    and the cached ``FeatureEngine`` wrapper. Splitting it out lets the engine
+    resolve specs once in its constructor and reuse them on every ``transform``.
+
+    Parameters
+    ----------
+    sorted_frame
+        Clean OHLCV data already sorted by symbol and timestamp.
+    resolved_features
+        List of ``(column_name, spec, params)`` tuples from :func:`_resolve_feature`.
+    reset_by_session
+        When ``True``, isolate features by symbol and calendar day so intraday
+        windows do not cross the overnight gap.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Identifier columns plus one column per resolved feature.
+    """
+    # Keep identifier columns separate from computed feature columns so exports
+    # stay compact and clearly signal what each row represents.
+    output = sorted_frame.loc[:, IDENTIFIER_COLUMNS].copy()
     group_keys = _feature_group_keys(sorted_frame, reset_by_session=reset_by_session)
 
-    for feature_config in selected_feature_configs:
-        column_name, spec, feature_params = _resolve_feature(feature_config)
+    for column_name, spec, params in resolved_features:
         output[column_name] = _compute_feature_series_by_group(
             sorted_frame,
             spec=spec,
-            params=feature_params,
+            params=params,
             group_keys=group_keys,
         )
 

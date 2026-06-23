@@ -123,3 +123,53 @@ enabled = true
 name = "volume_change"
 fn = "volume_change"
 enabled = true
+
+[[features.params]]
+name = "rsi_14"
+fn = "relative_strength_index"
+# Wilder smoothing length in bars.
+window = 14
+enabled = true
+
+[[features.params]]
+name = "atr_14"
+fn = "average_true_range"
+# Wilder smoothing length in bars. ATR is in price units (dollars).
+window = 14
+enabled = true
+
+[[features.params]]
+name = "macd_line"
+fn = "macd_line"
+# Fast and slow EMA spans (fast must be < slow).
+fast = 12
+slow = 26
+enabled = true
+
+[[features.params]]
+name = "macd_signal"
+fn = "macd_signal"
+fast = 12
+slow = 26
+# EMA span of the MACD line.
+signal = 9
+enabled = true
+
+[[features.params]]
+name = "macd_histogram"
+fn = "macd_histogram"
+fast = 12
+slow = 26
+signal = 9
+enabled = true
+
+[[features.params]]
+name = "vwap"
+fn = "vwap"
+# Cumulative within each group. Set reset_by_session = true for session VWAP.
+enabled = true
+
+[[features.params]]
+name = "price_vs_vwap"
+fn = "price_vs_vwap"
+enabled = true
