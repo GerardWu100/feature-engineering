@@ -24,8 +24,8 @@ def clean_ohlcv(
     data_quality
         Optional rule toggles. Supported keys are
         ``drop_missing_numeric_values``, ``drop_zero_prices``,
-        ``drop_high_lt_low``, and ``drop_ohlc_violations``. Missing keys
-        default to ``True``.
+        ``drop_negative_volume``, ``drop_high_lt_low``, and
+        ``drop_ohlc_violations``. Missing keys default to ``True``.
 
     Returns
     -------
@@ -56,6 +56,11 @@ def clean_ohlcv(
             "drop_zero_prices",
             lambda f: (f[PRICE_COLUMNS] <= 0).any(axis=1),
             "open, high, low, and close must be positive prices",
+        ),
+        (
+            "drop_negative_volume",
+            lambda f: f["volume"] < 0,
+            "volume must be greater than or equal to zero",
         ),
         (
             "drop_high_lt_low",

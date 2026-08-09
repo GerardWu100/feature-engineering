@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
 
 from feature_engineering.features.registry import REGISTRY
 from feature_engineering.pipeline.constants import (
     DEFAULT_CLICKHOUSE_TABLE,
-    DEFAULT_SESSION,
+    DEFAULT_EXCHANGE_TIMEZONE,
     SQL_IDENTIFIER_PATTERN,
 )
 from feature_engineering.pipeline.load import SESSION_FILTER_SQL
@@ -74,12 +75,42 @@ def _validate_run_config(run_config: dict[str, Any]) -> None:
     _validate_output_formats(run_config["output_formats"])
     _validate_non_empty_string(run_config["output_dir"], "run.output_dir")
     _validate_date_range(run_config)
+    _validate_session(run_config)
+    _validate_exchange_timezone(run_config)
 
     if source == "csv":
         _validate_csv_run_config(run_config)
         return
 
     _validate_clickhouse_run_config(run_config)
+
+
+def _validate_session(run_config: dict[str, Any]) -> None:
+    """Validate the optional session filter shared by both data sources."""
+    if "session" not in run_config:
+        # Loading applies a per-source default (rth for ClickHouse, full for
+        # CSV), both of which are valid, so an absent key needs no check.
+        return
+
+    if run_config["session"] not in ALLOWED_SESSIONS:
+        allowed_sessions = sorted(ALLOWED_SESSIONS)
+        raise ConfigValidationError(f"run.session must be one of {allowed_sessions}.")
+
+
+def _validate_exchange_timezone(run_config: dict[str, Any]) -> None:
+    """Validate the optional IANA exchange timezone name."""
+    timezone_name = run_config.get("exchange_timezone", DEFAULT_EXCHANGE_TIMEZONE)
+    if not isinstance(timezone_name, str) or not timezone_name.strip():
+        raise ConfigValidationError(
+            "run.exchange_timezone must be a non-empty string."
+        )
+
+    try:
+        ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ConfigValidationError(
+            f"run.exchange_timezone is not a valid IANA timezone: {timezone_name}."
+        ) from exc
 
 
 def _require_keys(
@@ -163,11 +194,6 @@ def _validate_clickhouse_run_config(run_config: dict[str, Any]) -> None:
     table = str(run_config.get("table", DEFAULT_CLICKHOUSE_TABLE))
     if not SQL_IDENTIFIER_PATTERN.fullmatch(table):
         raise ConfigValidationError(f"run.table is not a safe SQL identifier: {table}.")
-
-    session = run_config.get("session", DEFAULT_SESSION)
-    if session not in ALLOWED_SESSIONS:
-        allowed_sessions = sorted(ALLOWED_SESSIONS)
-        raise ConfigValidationError(f"run.session must be one of {allowed_sessions}.")
 
 
 def _validate_symbols(symbols: Any) -> None:

@@ -147,8 +147,16 @@ The loader assumes:
 
 - Prices are split- and dividend-adjusted. The pipeline does not adjust for
   corporate actions, so unadjusted prices would turn a split into a fake return.
-- `ts` is in the exchange's local wall-clock time (US equities: US/Eastern). The
-  ClickHouse session filter and the intraday reset both rely on this.
+- Naive `ts` values are in the exchange's local wall-clock time (US equities:
+  US/Eastern). Timezone-aware `ts` values (for example UTC exports) are
+  converted to `run.exchange_timezone` and stored naive, so the session filter
+  and the intraday reset always see exchange-local time.
+- One row per symbol per bar. Duplicate `(symbol, ts)` bars fail the load
+  loudly because they would double-count rows inside every rolling window.
+
+The `run.session` filter (`rth`, `extended`, `full`) applies to both data
+sources. CSV runs default to `full` because daily files are stamped at
+midnight; ClickHouse runs default to `rth`.
 
 ## Use As A Module
 

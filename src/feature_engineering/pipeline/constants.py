@@ -24,10 +24,18 @@ NUMERIC_OHLCV_COLUMNS = ["open", "high", "low", "close", "volume"]
 # ClickHouse table names must be simple identifiers before SQL interpolation.
 SQL_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-# ClickHouse run defaults shared by config validation and data loading, so the
-# two stages cannot silently disagree about what an omitted key means.
+# Run defaults shared by config validation and data loading, so the two
+# stages cannot silently disagree about what an omitted key means.
 DEFAULT_CLICKHOUSE_TABLE = "stocks"
 DEFAULT_SESSION = "rth"
+
+# CSV files are often daily bars stamped at midnight, which an "rth" default
+# would drop entirely, so CSV runs apply no session filter unless asked.
+DEFAULT_CSV_SESSION = "full"
+
+# Exchange timezone used to convert timezone-aware input timestamps to
+# exchange-local wall-clock time. Naive inputs are assumed already local.
+DEFAULT_EXCHANGE_TIMEZONE = "America/New_York"
 
 
 def sort_by_symbol_and_time(frame: pd.DataFrame) -> pd.DataFrame:

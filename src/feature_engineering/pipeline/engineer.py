@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from feature_engineering.features.registry import REGISTRY, FeatureSpec
@@ -94,6 +95,7 @@ def apply_resolved_features(
         output[column_name] = _compute_feature_series_by_group(
             grouped,
             frame_index=sorted_frame.index,
+            feature_name=column_name,
             spec=spec,
             params=params,
         )
@@ -136,6 +138,7 @@ def _compute_feature_series_by_group(
     grouped: Any,
     *,
     frame_index: pd.Index,
+    feature_name: str,
     spec: FeatureSpec,
     params: dict[str, Any],
 ) -> pd.Series:
@@ -149,6 +152,9 @@ def _compute_feature_series_by_group(
         in the caller lets every feature reuse the same group slices.
     frame_index
         Index of the full sorted frame, used to align the result.
+    feature_name
+        Output column name, used to attribute contract violations to the
+        feature that produced them.
     spec
         Registry entry holding the concrete feature function and metadata.
     params
@@ -168,6 +174,12 @@ def _compute_feature_series_by_group(
     # avoids hiding the feature call behind a groupby/apply lambda.
     for _group_key, group_frame in grouped:
         group_values = spec.fn(group_frame, params)
+        _validate_feature_result(
+            feature_name,
+            group_values,
+            expected_index=group_frame.index,
+            expected_length=len(group_frame),
+        )
         values_by_group.append(group_values)
 
     if not values_by_group:
@@ -177,6 +189,57 @@ def _compute_feature_series_by_group(
     # Reindexing restores exact frame order even if pandas changes grouping
     # internals in a future release.
     return pd.concat(values_by_group).reindex(frame_index)
+
+
+def _validate_feature_result(
+    feature_name: str,
+    values: object,
+    *,
+    expected_index: pd.Index,
+    expected_length: int,
+) -> None:
+    """Validate one per-group feature result before it joins the output.
+
+    A feature function that returns the wrong shape or a misaligned index
+    would silently attach values to the wrong bars during concatenation and
+    reindexing, so shape and index are hard contracts. Infinities are also
+    rejected: with cleaning enabled no registered feature can produce them, so
+    an infinity means either corrupt input (cleaning disabled) or a bug in the
+    feature function. NaN is allowed because warm-up windows legitimately
+    produce it.
+
+    Parameters
+    ----------
+    feature_name
+        Output column name, used in error messages.
+    values
+        Whatever the feature function returned for one isolation group.
+    expected_index
+        Index of the group slice the function was called with.
+    expected_length
+        Row count of that group slice.
+
+    Raises
+    ------
+    ValueError
+        If the result is not a Series, has the wrong length or index, is not
+        numeric, or contains infinite values.
+    """
+    if not isinstance(values, pd.Series):
+        raise ValueError(f"Feature {feature_name} must return a pandas Series")
+
+    if len(values) != expected_length:
+        raise ValueError(f"Feature {feature_name} must return the same length as input")
+
+    if not values.index.equals(expected_index):
+        raise ValueError(f"Feature {feature_name} must return the same index as input")
+
+    if not pd.api.types.is_numeric_dtype(values):
+        raise ValueError(f"Feature {feature_name} must return numeric values")
+
+    finite_or_nan = np.isfinite(values) | pd.isna(values)
+    if not bool(finite_or_nan.all()):
+        raise ValueError(f"Feature {feature_name} produced infinite values")
 
 
 def selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:

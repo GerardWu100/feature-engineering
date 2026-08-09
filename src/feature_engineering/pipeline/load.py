@@ -13,12 +13,23 @@ Data contract (assumptions every caller must satisfy)
    split- and dividend-adjusted. This pipeline does not apply corporate-action
    adjustments. Unadjusted prices make a split look like a large return and
    silently corrupt every return, trend, and volatility feature.
-2. Exchange-local timestamps. ``ts`` must be in the exchange's local wall-clock
-   time (US equities: US/Eastern). The ClickHouse session filter below selects
-   regular trading hours with ``toHour(ts)``/``toMinute(ts)``, so a column
-   stored in UTC would select the wrong bars. The intraday ``reset_by_session``
-   option in ``engineer.py`` likewise groups by the local calendar date.
+2. Exchange-local timestamps. All loaded ``ts`` values are normalized to naive
+   exchange-local wall-clock time (``run.exchange_timezone``, default
+   US/Eastern). Naive input timestamps are trusted to already be exchange-local;
+   timezone-aware inputs are converted. The ClickHouse session filter below
+   selects regular trading hours with ``toHour(ts)``/``toMinute(ts)``, so a
+   database column stored in UTC would select the wrong bars. The intraday
+   ``reset_by_session`` option in ``engineer.py`` likewise groups by the local
+   calendar date.
 3. One row per symbol per bar, with consistent bar size across the run.
+   Duplicate ``(symbol, ts)`` bars are rejected with an error because they
+   would double-count rows inside every rolling window.
+
+Known limitation: naive local timestamps cannot distinguish the repeated
+01:00-01:59 hour on the autumn daylight-saving fall-back day. Timezone-aware
+overnight data crossing that hour collapses onto the same wall-clock times and
+is rejected as duplicate bars. The ``rth`` and ``extended`` sessions never
+include that hour, so this only affects ``full``-session overnight data.
 """
 
 from __future__ import annotations
@@ -26,12 +37,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from dotenv import load_dotenv
 
 from feature_engineering.pipeline.constants import (
     DEFAULT_CLICKHOUSE_TABLE,
+    DEFAULT_CSV_SESSION,
+    DEFAULT_EXCHANGE_TIMEZONE,
     DEFAULT_SESSION,
     NUMERIC_OHLCV_COLUMNS,
     OHLCV_COLUMNS,
@@ -44,22 +58,30 @@ EXTENDED_SESSION_END_MINUTE = 19 * 60 + 59
 RTH_SESSION_START_MINUTE = 9 * 60 + 30
 RTH_SESSION_END_MINUTE = 15 * 60 + 59
 
-# One SQL filter fragment per supported trading session. Config validation
-# derives its allowed-session set from these keys, so adding a session here is
-# the only edit needed to support it end to end.
-SESSION_FILTER_SQL: dict[str, str] = {
+# Inclusive (start, end) minute-of-day bounds per supported trading session, or
+# None for no time-of-day filter. This is the single source of truth for
+# sessions: the SQL fragments below and the pandas mask for CSV loads are both
+# derived from it, and config validation derives its allowed-session set from
+# the SQL mapping, so adding a session here supports it end to end.
+SESSION_MINUTE_RANGES: dict[str, tuple[int, int] | None] = {
     # All bars, no time-of-day filter.
-    "full": "",
+    "full": None,
     # 04:00 through 19:59, useful for pre-market and after-hours studies.
-    "extended": (
-        "AND (toHour(ts) * 60 + toMinute(ts)) "
-        f"BETWEEN {EXTENDED_SESSION_START_MINUTE} AND {EXTENDED_SESSION_END_MINUTE}"
-    ),
+    "extended": (EXTENDED_SESSION_START_MINUTE, EXTENDED_SESSION_END_MINUTE),
     # 09:30 through 15:59 regular trading hours.
-    "rth": (
-        "AND (toHour(ts) * 60 + toMinute(ts)) "
-        f"BETWEEN {RTH_SESSION_START_MINUTE} AND {RTH_SESSION_END_MINUTE}"
-    ),
+    "rth": (RTH_SESSION_START_MINUTE, RTH_SESSION_END_MINUTE),
+}
+
+SESSION_FILTER_SQL: dict[str, str] = {
+    session: (
+        ""
+        if minute_range is None
+        else (
+            "AND (toHour(ts) * 60 + toMinute(ts)) "
+            f"BETWEEN {minute_range[0]} AND {minute_range[1]}"
+        )
+    )
+    for session, minute_range in SESSION_MINUTE_RANGES.items()
 }
 
 
@@ -95,11 +117,11 @@ def _load_csv(run_config: dict[str, Any]) -> pd.DataFrame:
     input_path = Path(run_config["input_path"])
     frame = pd.read_csv(input_path)
 
-    # Parse timestamps immediately so sorting, date filtering, and feature
-    # windows all operate on real datetime values.
-    frame["ts"] = pd.to_datetime(frame["ts"])
-    frame = _filter_frame(frame, run_config)
-    return _finalize_ohlcv_frame(frame)
+    # Normalize schema and timestamps first so symbol, date, and session
+    # filters all operate on validated exchange-local datetime values.
+    exchange_timezone = run_config.get("exchange_timezone", DEFAULT_EXCHANGE_TIMEZONE)
+    frame = _finalize_ohlcv_frame(frame, exchange_timezone=exchange_timezone)
+    return _filter_frame(frame, run_config)
 
 
 def _load_clickhouse(run_config: dict[str, Any]) -> pd.DataFrame:
@@ -136,7 +158,8 @@ def _load_clickhouse(run_config: dict[str, Any]) -> pd.DataFrame:
         "end_date": end_date,
     }
     result = client.query_df(query, parameters=query_parameters)
-    return _finalize_ohlcv_frame(result)
+    exchange_timezone = run_config.get("exchange_timezone", DEFAULT_EXCHANGE_TIMEZONE)
+    return _finalize_ohlcv_frame(result, exchange_timezone=exchange_timezone)
 
 
 def _validated_symbols(symbols: list[Any]) -> list[str]:
@@ -161,7 +184,7 @@ def _validated_sql_identifier(value: str, label: str) -> str:
 
 
 def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFrame:
-    """Apply symbol and date filters to a local OHLCV frame."""
+    """Apply symbol, date, and session filters to a local OHLCV frame."""
     filtered = frame
 
     symbols = run_config.get("symbols")
@@ -170,8 +193,9 @@ def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFra
         filtered = filtered[filtered["symbol"].isin(symbols)]
 
     if "start_date" in run_config or "end_date" in run_config:
-        # Calendar-date comparison works for both naive and tz-aware timestamps.
-        # Materialize the date column once and reuse it for both bounds.
+        # Timestamps are already naive exchange-local, so calendar-date bounds
+        # mean exchange trading dates. Materialize the date column once and
+        # reuse it for both bounds.
         bar_dates = filtered["ts"].dt.date
         if "start_date" in run_config:
             start = pd.Timestamp(run_config["start_date"]).date()
@@ -180,7 +204,40 @@ def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFra
             end = pd.Timestamp(run_config["end_date"]).date()
             filtered = filtered[bar_dates.loc[filtered.index] <= end]
 
-    return filtered
+    # CSV defaults to "full" (no time-of-day filter) because local files are
+    # often daily bars stamped at midnight, which an "rth" default would drop
+    # entirely. An explicit run.session is always honored.
+    session = run_config.get("session", DEFAULT_CSV_SESSION)
+    filtered = filtered[_session_mask(filtered["ts"], session)]
+
+    return filtered.reset_index(drop=True)
+
+
+def _session_mask(timestamps: pd.Series, session: str) -> pd.Series:
+    """Return a boolean mask selecting bars inside one trading session.
+
+    Parameters
+    ----------
+    timestamps
+        Naive exchange-local timestamps, one per bar.
+    session
+        Key into ``SESSION_MINUTE_RANGES`` (``full``, ``extended``, or ``rth``).
+
+    Returns
+    -------
+    pandas.Series
+        Boolean mask aligned to ``timestamps`` selecting bars whose
+        minute-of-day falls inside the session's inclusive bounds.
+    """
+    if session not in SESSION_MINUTE_RANGES:
+        raise ValueError(f"Unsupported session filter: {session}")
+
+    minute_range = SESSION_MINUTE_RANGES[session]
+    if minute_range is None:
+        return pd.Series(True, index=timestamps.index)
+
+    minute_of_day = timestamps.dt.hour * 60 + timestamps.dt.minute
+    return minute_of_day.between(minute_range[0], minute_range[1])
 
 
 def _build_clickhouse_client_from_env() -> Any:
@@ -202,8 +259,37 @@ def _build_clickhouse_client_from_env() -> Any:
     return clickhouse_connect.get_client(**client_options)
 
 
-def _finalize_ohlcv_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    """Select standard columns, coerce types, and sort by symbol and time."""
+def _finalize_ohlcv_frame(
+    frame: pd.DataFrame,
+    *,
+    exchange_timezone: str,
+) -> pd.DataFrame:
+    """Select standard columns, validate identifiers, coerce types, and sort.
+
+    Parameters
+    ----------
+    frame
+        Raw loader output containing at least the standard OHLCV columns.
+    exchange_timezone
+        IANA timezone name used to convert timezone-aware timestamps to
+        exchange-local wall-clock time. Naive timestamps are trusted to
+        already be exchange-local.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Standard OHLCV columns with stripped symbols, naive exchange-local
+        timestamps, numeric price and volume columns, sorted by symbol and
+        time with a fresh integer index.
+
+    Raises
+    ------
+    KeyError
+        If required OHLCV columns are missing.
+    ValueError
+        If symbols are missing or empty, or if duplicate ``(symbol, ts)``
+        bars exist after timezone normalization.
+    """
     missing_columns = [
         column for column in OHLCV_COLUMNS if column not in frame.columns
     ]
@@ -211,10 +297,84 @@ def _finalize_ohlcv_frame(frame: pd.DataFrame) -> pd.DataFrame:
         raise KeyError(f"Missing OHLCV columns: {missing_columns}")
 
     finalized = frame.loc[:, OHLCV_COLUMNS].copy()
-    finalized["ts"] = pd.to_datetime(finalized["ts"])
+
+    # Whitespace-only or missing symbols would create phantom groups in every
+    # per-symbol feature computation, so fail loudly instead.
+    finalized["symbol"] = finalized["symbol"].astype("string").str.strip()
+    if finalized["symbol"].isna().any() or (finalized["symbol"] == "").any():
+        raise ValueError("OHLCV symbol values must be present and non-empty")
+
+    finalized["ts"] = _parse_timestamps_as_exchange_local(
+        finalized["ts"], exchange_timezone
+    )
 
     for column in NUMERIC_OHLCV_COLUMNS:
         finalized[column] = pd.to_numeric(finalized[column], errors="coerce")
 
     # Stable ordering is a contract for all feature functions.
-    return sort_by_symbol_and_time(finalized)
+    finalized = sort_by_symbol_and_time(finalized)
+
+    # Duplicate bars double-count rows inside rolling windows and silently
+    # skew every windowed feature, so they are a hard error. Checked after
+    # timezone normalization because two differently-labeled input rows can
+    # collapse onto the same exchange-local timestamp.
+    if finalized.duplicated(["symbol", "ts"]).any():
+        raise ValueError("Duplicate OHLCV bars found for symbol/timestamp pairs")
+
+    return finalized
+
+
+def _parse_timestamps_as_exchange_local(
+    timestamps: pd.Series,
+    exchange_timezone: str,
+) -> pd.Series:
+    """Parse timestamps and normalize them to naive exchange-local time.
+
+    Naive inputs are trusted to already be exchange-local wall-clock time and
+    pass through unchanged. Timezone-aware inputs (for example UTC exports)
+    are converted to ``exchange_timezone`` and then stripped of their tzinfo,
+    so every downstream stage sees one consistent naive representation.
+
+    Parameters
+    ----------
+    timestamps
+        Raw timestamp column: strings, datetimes, or a mix of naive and
+        timezone-aware values.
+    exchange_timezone
+        IANA timezone name of the exchange, for example ``America/New_York``.
+
+    Returns
+    -------
+    pandas.Series
+        Naive exchange-local ``datetime64`` values aligned to the input index.
+    """
+    zone = ZoneInfo(exchange_timezone)
+
+    try:
+        parsed = pd.to_datetime(timestamps)
+    except (TypeError, ValueError):
+        # Mixed naive and aware inputs cannot be parsed in one vectorized
+        # call; fall back to per-element parsing and normalize each value.
+        parsed = timestamps.apply(pd.Timestamp)
+
+    if isinstance(parsed.dtype, pd.DatetimeTZDtype):
+        return parsed.dt.tz_convert(zone).dt.tz_localize(None)
+
+    if pd.api.types.is_datetime64_any_dtype(parsed.dtype):
+        return parsed
+
+    # Object dtype: element-wise mix of naive and aware timestamps.
+    normalized = parsed.apply(
+        lambda value: _one_timestamp_as_exchange_local(pd.Timestamp(value), zone)
+    )
+    return pd.to_datetime(normalized)
+
+
+def _one_timestamp_as_exchange_local(
+    timestamp: pd.Timestamp,
+    zone: ZoneInfo,
+) -> pd.Timestamp:
+    """Normalize one timestamp to naive exchange-local wall-clock time."""
+    if timestamp.tzinfo is None:
+        return timestamp
+    return timestamp.tz_convert(zone).tz_localize(None)
