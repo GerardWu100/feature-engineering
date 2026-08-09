@@ -101,9 +101,7 @@ def _validate_exchange_timezone(run_config: dict[str, Any]) -> None:
     """Validate the optional IANA exchange timezone name."""
     timezone_name = run_config.get("exchange_timezone", DEFAULT_EXCHANGE_TIMEZONE)
     if not isinstance(timezone_name, str) or not timezone_name.strip():
-        raise ConfigValidationError(
-            "run.exchange_timezone must be a non-empty string."
-        )
+        raise ConfigValidationError("run.exchange_timezone must be a non-empty string.")
 
     try:
         ZoneInfo(timezone_name)

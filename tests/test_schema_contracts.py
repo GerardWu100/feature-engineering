@@ -28,9 +28,7 @@ def _raw_frame() -> pd.DataFrame:
 
 def test_finalize_ohlcv_frame_normalizes_schema_and_sorting() -> None:
     """Finalized OHLCV data should be typed, stripped, sorted, and reindexed."""
-    finalized = _finalize_ohlcv_frame(
-        _raw_frame(), exchange_timezone=EXCHANGE_TIMEZONE
-    )
+    finalized = _finalize_ohlcv_frame(_raw_frame(), exchange_timezone=EXCHANGE_TIMEZONE)
 
     assert finalized["symbol"].tolist() == ["AAPL", "MSFT"]
     assert finalized.index.tolist() == [0, 1]
@@ -43,9 +41,7 @@ def test_missing_symbol_values_are_rejected() -> None:
     frame = _raw_frame()
     frame.loc[0, "symbol"] = "   "
 
-    with pytest.raises(
-        ValueError, match="symbol values must be present and non-empty"
-    ):
+    with pytest.raises(ValueError, match="symbol values must be present and non-empty"):
         _finalize_ohlcv_frame(frame, exchange_timezone=EXCHANGE_TIMEZONE)
 
 
