@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from feature_engineering.features.registry import as_feature_column, register
+from feature_engineering.features.trend import _wilder_average
 
 
 @register(
@@ -137,9 +138,7 @@ def average_true_range(df: pd.DataFrame, params: dict) -> pd.Series:
         axis=1
     )
 
-    # Wilder smoothing (EMA with alpha = 1 / window). true_range has no NaN, so
-    # the recursion seeds on the first bar and matches the online accumulator.
-    average_range = true_range.ewm(
-        alpha=1.0 / window, adjust=False, min_periods=window
-    ).mean()
-    return as_feature_column(average_range)
+    # Wilder smoothing (EMA with alpha = 1 / window), shared with RSI. The
+    # true_range series has no NaN, so the recursion seeds on the first bar and
+    # matches the online accumulator.
+    return as_feature_column(_wilder_average(true_range, window))

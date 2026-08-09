@@ -73,7 +73,6 @@ symbol,ts,open,high,low,close,volume
 ```text
 feature-engineering/
 ├── run.py
-├── main.py
 ├── config.toml
 ├── src/
 │   └── feature_engineering/
@@ -176,9 +175,9 @@ engine = FeatureEngine(config_dict)
 features = engine.transform(cleaned)
 
 # Live trading: O(1) per bar. Feed one bar (dict or Series) at a time.
-live = OnlineFeatureEngine(config_dict)        # rejects forward-looking targets
-for bar in stream:                              # bar has symbol, ts, OHLCV keys
-    values = live.update(bar)                   # -> {feature_name: value}
+live = OnlineFeatureEngine(config_dict)  # rejects forward-looking targets
+for bar in stream:  # bar has symbol, ts, OHLCV keys
+    values = live.update(bar)  # -> {feature_name: value}
 ```
 
 The online accumulators reproduce the batch feature math exactly; an equivalence

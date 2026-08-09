@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from feature_engineering.pipeline.config import ConfigValidationError, validate_config
 
 

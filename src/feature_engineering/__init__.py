@@ -32,15 +32,15 @@ from feature_engineering.pipeline.load import load_ohlcv
 
 __all__ = [
     "REGISTRY",
+    "FeatureEngine",
     "FeatureSpec",
-    "register",
-    "validate_config",
-    "load_ohlcv",
+    "OnlineFeatureEngine",
+    "build_feature_catalog",
     "clean_ohlcv",
     "compute_features",
-    "FeatureEngine",
-    "OnlineFeatureEngine",
     "export_features",
-    "build_feature_catalog",
+    "load_ohlcv",
+    "register",
     "run_pipeline",
+    "validate_config",
 ]

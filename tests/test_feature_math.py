@@ -6,7 +6,6 @@ import math
 
 import numpy as np
 import pandas as pd
-
 from feature_engineering.features.returns import (
     log_return,
     next_n_bar_return,

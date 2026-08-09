@@ -27,7 +27,6 @@ The project now supports one core use case: stock OHLCV feature engineering. Opt
 | Path | Purpose |
 |---|---|
 | `run.py` | Root command wrapper. Delegates to `feature_engineering.pipeline.cli.main`. |
-| `main.py` | Compatibility wrapper that delegates to `run.py`. |
 | `config.toml` | Single feature engineering config. |
 | `pyproject.toml` | Package metadata, dependencies, and console script definitions. |
 | `README.md` | User-facing overview and run instructions. |
@@ -42,3 +41,4 @@ Start at `run.py` for execution, then read `src/feature_engineering/pipeline/cli
 
 - 2026-04-24: Simplified the project to one categorized stock OHLCV feature pipeline and removed options, diagnostics, transforms, and backtesting proof-of-concepts from the main package.
 - 2026-04-26: Moved implementation packages under the `feature_engineering` namespace to avoid generic top-level imports.
+- 2026-08-09: Removed the redundant entry-point wrappers (`main.py`, `src/main.py`, `src/run.py`) and the duplicate `feature-engineering` console script. `uv run python run.py` and the `feature-pipeline` script are the two remaining ways to run the CLI.

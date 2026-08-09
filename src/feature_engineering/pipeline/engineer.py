@@ -7,7 +7,10 @@ from typing import Any
 import pandas as pd
 
 from feature_engineering.features.registry import REGISTRY, FeatureSpec
-from feature_engineering.pipeline.constants import IDENTIFIER_COLUMNS
+from feature_engineering.pipeline.constants import (
+    IDENTIFIER_COLUMNS,
+    sort_by_symbol_and_time,
+)
 
 RESERVED_FEATURE_KEYS = {"name", "fn", "enabled"}
 
@@ -34,9 +37,10 @@ def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFram
         Identifier columns plus computed feature columns. Raw OHLCV columns are
         intentionally omitted from the output to keep the feature dataset small.
     """
-    sorted_frame = frame.sort_values(["symbol", "ts"]).reset_index(drop=True)
-    selected_feature_configs = _selected_feature_configs(config)
-    resolved_features = [_resolve_feature(item) for item in selected_feature_configs]
+    sorted_frame = sort_by_symbol_and_time(frame)
+    resolved_features = [
+        resolve_feature(item) for item in selected_feature_configs(config)
+    ]
 
     # Choose the isolation boundary. Always isolate by symbol. When the run is
     # intraday and asks for session resets, also isolate by calendar day so a
@@ -67,7 +71,7 @@ def apply_resolved_features(
     sorted_frame
         Clean OHLCV data already sorted by symbol and timestamp.
     resolved_features
-        List of ``(column_name, spec, params)`` tuples from :func:`_resolve_feature`.
+        List of ``(column_name, spec, params)`` tuples from :func:`resolve_feature`.
     reset_by_session
         When ``True``, isolate features by symbol and calendar day so intraday
         windows do not cross the overnight gap.
@@ -82,12 +86,16 @@ def apply_resolved_features(
     output = sorted_frame.loc[:, IDENTIFIER_COLUMNS].copy()
     group_keys = _feature_group_keys(sorted_frame, reset_by_session=reset_by_session)
 
+    # Build the groupby once; every feature column reuses the same grouping
+    # instead of re-slicing the frame per feature.
+    grouped = sorted_frame.groupby(group_keys, sort=False)
+
     for column_name, spec, params in resolved_features:
         output[column_name] = _compute_feature_series_by_group(
-            sorted_frame,
+            grouped,
+            frame_index=sorted_frame.index,
             spec=spec,
             params=params,
-            group_keys=group_keys,
         )
 
     return output
@@ -125,31 +133,32 @@ def _feature_group_keys(
 
 
 def _compute_feature_series_by_group(
-    frame: pd.DataFrame,
+    grouped: Any,
     *,
+    frame_index: pd.Index,
     spec: FeatureSpec,
     params: dict[str, Any],
-    group_keys: list[Any],
 ) -> pd.Series:
     """Apply one feature function independently within each isolation group.
 
     Parameters
     ----------
-    frame
-        Clean OHLCV data sorted by symbol and timestamp.
+    grouped
+        A ``DataFrameGroupBy`` over the sorted OHLCV frame, keyed by the
+        isolation boundary from :func:`_feature_group_keys`. Building it once
+        in the caller lets every feature reuse the same group slices.
+    frame_index
+        Index of the full sorted frame, used to align the result.
     spec
         Registry entry holding the concrete feature function and metadata.
     params
         Function-specific settings from one config item, such as ``window`` or
         ``bars``.
-    group_keys
-        Groupby keys from :func:`_feature_group_keys`. ``["symbol"]`` isolates by
-        ticker; ``["symbol", session_date]`` also isolates by trading day.
 
     Returns
     -------
     pandas.Series
-        One feature column aligned to ``frame.index``. Each group is computed in
+        One feature column aligned to ``frame_index``. Each group is computed in
         isolation so rolling windows and lags cannot cross ticker boundaries, or
         day boundaries when session resets are enabled.
     """
@@ -157,20 +166,20 @@ def _compute_feature_series_by_group(
 
     # Compute each group separately. This makes the isolation rule explicit and
     # avoids hiding the feature call behind a groupby/apply lambda.
-    for _group_key, group_frame in frame.groupby(group_keys, sort=False):
+    for _group_key, group_frame in grouped:
         group_values = spec.fn(group_frame, params)
         values_by_group.append(group_values)
 
     if not values_by_group:
-        return pd.Series(index=frame.index, dtype="float64")
+        return pd.Series(index=frame_index, dtype="float64")
 
     # Concatenation preserves the original row labels from each group slice.
     # Reindexing restores exact frame order even if pandas changes grouping
     # internals in a future release.
-    return pd.concat(values_by_group).reindex(frame.index)
+    return pd.concat(values_by_group).reindex(frame_index)
 
 
-def _selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
+def selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Return enabled feature config entries after category filtering."""
     feature_config = config.get("features", {})
     include_categories = set(feature_config.get("include_categories", []))
@@ -216,7 +225,7 @@ def _category_is_selected(
     return True
 
 
-def _resolve_feature(
+def resolve_feature(
     feature_config: dict[str, Any],
 ) -> tuple[str, FeatureSpec, dict[str, Any]]:
     """Look up one feature config entry and split function params from metadata."""

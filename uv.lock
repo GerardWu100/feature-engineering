@@ -298,8 +298,6 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "python-dotenv" },
-    { name = "ruff" },
-    { name = "setuptools" },
 ]
 
 [package.dev-dependencies]
@@ -316,8 +314,6 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.1" },
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "ruff", specifier = ">=0.15.6" },
-    { name = "setuptools", specifier = ">=82.0.0" },
 ]
 
 [package.metadata.requires-dev]

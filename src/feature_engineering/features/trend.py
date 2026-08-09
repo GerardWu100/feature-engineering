@@ -10,6 +10,16 @@ import pandas as pd
 
 from feature_engineering.features.registry import as_feature_column, register
 
+# Default feature parameters. Named here, next to the batch definitions, and
+# imported by the online engine so both implementations always agree on what an
+# omitted config parameter means. Callers override them through config.
+DEFAULT_SMA_WINDOW = 20
+DEFAULT_ROC_PERIODS = 20
+DEFAULT_RSI_WINDOW = 14
+DEFAULT_MACD_FAST = 12
+DEFAULT_MACD_SLOW = 26
+DEFAULT_MACD_SIGNAL = 9
+
 
 @register(
     category="trend",
@@ -45,7 +55,7 @@ def moving_average(df: pd.DataFrame, params: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda params: params.get("window", 20),
+    lookback=lambda params: int(params.get("window", DEFAULT_SMA_WINDOW)),
     description="Close price divided by its moving average minus one.",
     calculation="close_t / moving_average_t - 1",
 )
@@ -64,7 +74,7 @@ def price_vs_sma(df: pd.DataFrame, params: dict) -> pd.Series:
     pandas.Series
         Dimensionless distance from the moving average, aligned to ``df.index``.
     """
-    window = int(params.get("window", 20))
+    window = int(params.get("window", DEFAULT_SMA_WINDOW))
     if window < 1:
         raise ValueError("price_vs_sma requires window >= 1.")
 
@@ -78,7 +88,7 @@ def price_vs_sma(df: pd.DataFrame, params: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda params: params.get("periods", 20),
+    lookback=lambda params: int(params.get("periods", DEFAULT_ROC_PERIODS)),
     description="Rate of change over a fixed number of rows.",
     calculation="close_t / close_{t-periods} - 1",
 )
@@ -97,19 +107,11 @@ def rate_of_change(df: pd.DataFrame, params: dict) -> pd.Series:
     pandas.Series
         Percentage price change over ``periods`` rows, aligned to ``df.index``.
     """
-    periods = int(params.get("periods", 20))
+    periods = int(params.get("periods", DEFAULT_ROC_PERIODS))
     if periods < 1:
         raise ValueError("rate_of_change requires periods >= 1.")
 
     return as_feature_column(df["close"].pct_change(periods=periods))
-
-
-# Default oscillator and MACD parameters. Named here so the values are easy to
-# find and so callers can override them through config without editing source.
-DEFAULT_RSI_WINDOW = 14
-DEFAULT_MACD_FAST = 12
-DEFAULT_MACD_SLOW = 26
-DEFAULT_MACD_SIGNAL = 9
 
 
 def _ema(values: pd.Series, span: int) -> pd.Series:
@@ -221,19 +223,17 @@ def _macd_line_series(close: pd.Series, fast: int, slow: int) -> pd.Series:
     return _ema(close, fast) - _ema(close, slow)
 
 
-def _macd_signal_series(
-    close: pd.Series, fast: int, slow: int, signal: int
-) -> pd.Series:
-    """Return the MACD signal line: an EMA of the MACD line.
+def _macd_signal_from_line(macd: pd.Series, signal: int) -> pd.Series:
+    """Return the MACD signal line: an EMA of a precomputed MACD line.
 
     The MACD line's leading warmup ``NaN`` rows are dropped before smoothing so
     the signal EMA seeds on the first real MACD value, then the result is
     reindexed back so those early rows stay ``NaN``. Both ``macd_signal`` and
     ``macd_histogram`` go through this one helper so their signal-line math
-    cannot drift apart.
+    cannot drift apart. Taking the line as input lets callers that also need
+    the line itself compute it only once.
     """
-    macd = _macd_line_series(close, fast, slow)
-    return _ema(macd.dropna(), signal).reindex(close.index)
+    return _ema(macd.dropna(), signal).reindex(macd.index)
 
 
 @register(
@@ -302,12 +302,10 @@ def macd_signal(df: pd.DataFrame, params: dict) -> pd.Series:
     if fast >= slow:
         raise ValueError("macd_signal requires fast < slow.")
 
-    close = df["close"]
-
     # Delegate the warmup-drop + reindex to the shared helper so this stays in
     # lockstep with the histogram's signal line.
-    signal_line = _macd_signal_series(close, fast, slow, signal)
-    return as_feature_column(signal_line)
+    macd = _macd_line_series(df["close"], fast, slow)
+    return as_feature_column(_macd_signal_from_line(macd, signal))
 
 
 @register(
@@ -340,9 +338,10 @@ def macd_histogram(df: pd.DataFrame, params: dict) -> pd.Series:
     if fast >= slow:
         raise ValueError("macd_histogram requires fast < slow.")
 
-    close = df["close"]
-    macd = _macd_line_series(close, fast, slow)
-    signal_line = _macd_signal_series(close, fast, slow, signal)
+    # Compute the line once and feed it to the signal helper so the two EMAs of
+    # close are not evaluated twice.
+    macd = _macd_line_series(df["close"], fast, slow)
+    signal_line = _macd_signal_from_line(macd, signal)
 
     # The histogram is the gap between momentum (MACD line) and its own EMA.
     return as_feature_column(macd - signal_line)

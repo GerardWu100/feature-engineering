@@ -28,8 +28,6 @@ feature_engineering.features = quantitative formulas
 
 | Path | Purpose |
 |---|---|
-| `main.py` | Packaged compatibility wrapper. |
-| `run.py` | Packaged CLI wrapper. |
 | `feature_engineering/` | Namespaced package for the project implementation. |
 | `feature_engineering/features/` | Categorized stock feature functions and registry. |
 | `feature_engineering/engine/` | Cached batch `FeatureEngine` and incremental `OnlineFeatureEngine`. |

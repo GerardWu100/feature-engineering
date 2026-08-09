@@ -18,10 +18,11 @@ from typing import Any
 import pandas as pd
 
 from feature_engineering.features.registry import FeatureSpec
+from feature_engineering.pipeline.constants import sort_by_symbol_and_time
 from feature_engineering.pipeline.engineer import (
-    _resolve_feature,
-    _selected_feature_configs,
     apply_resolved_features,
+    resolve_feature,
+    selected_feature_configs,
 )
 
 
@@ -54,9 +55,8 @@ class FeatureEngine:
 
         # Resolve and cache the selected feature specs once. This is the work we
         # avoid repeating on every transform call.
-        selected_feature_configs = _selected_feature_configs(config)
         self._resolved_features: list[tuple[str, FeatureSpec, dict[str, Any]]] = [
-            _resolve_feature(item) for item in selected_feature_configs
+            resolve_feature(item) for item in selected_feature_configs(config)
         ]
 
     @property
@@ -79,7 +79,7 @@ class FeatureEngine:
             Identifier columns (``symbol``, ``ts``) plus one column per
             configured feature, identical to ``compute_features`` output.
         """
-        sorted_frame = frame.sort_values(["symbol", "ts"]).reset_index(drop=True)
+        sorted_frame = sort_by_symbol_and_time(frame)
         return apply_resolved_features(
             sorted_frame,
             resolved_features=self._resolved_features,

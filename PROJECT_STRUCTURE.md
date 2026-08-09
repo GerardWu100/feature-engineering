@@ -4,7 +4,6 @@ The project uses a small Python `src/` layout.
 
 ```text
 feature-engineering/
-├── main.py
 ├── run.py
 ├── config.toml
 ├── pyproject.toml
@@ -14,8 +13,6 @@ feature-engineering/
 ├── PROJECT_STRUCTURE.md
 ├── src/
 │   ├── GUIDE_src.md
-│   ├── main.py
-│   ├── run.py
 │   └── feature_engineering/
 │       ├── __init__.py
 │       ├── GUIDE_feature_engineering.md
@@ -56,7 +53,6 @@ feature-engineering/
 | Path | Purpose |
 |---|---|
 | `run.py` | Root wrapper for the pipeline CLI. |
-| `main.py` | Compatibility wrapper that delegates to `run.py`. |
 | `config.toml` | Single config file for stock OHLCV feature runs. |
 | `pyproject.toml` | Package metadata, dependencies, and console scripts. |
 

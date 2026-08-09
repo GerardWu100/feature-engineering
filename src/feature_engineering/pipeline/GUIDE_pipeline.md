@@ -22,7 +22,7 @@ The pipeline intentionally does not contain feature math. That keeps data moveme
 |---|---|
 | `cli.py` | Parses CLI arguments, loads TOML config, and runs the workflow. |
 | `config.py` | Validates parsed config before loading, cleaning, engineering, or exporting. |
-| `constants.py` | Shared OHLCV column names and SQL identifier rules used by multiple stages. |
+| `constants.py` | Shared OHLCV column names, ClickHouse defaults, SQL identifier rules, and the canonical symbol/time sort helper. |
 | `load.py` | Loads OHLCV data from CSV or ClickHouse, with validation around ClickHouse query inputs. |
 | `clean.py` | Drops invalid or missing OHLCV rows and returns a quality report. |
 | `engineer.py` | Computes enabled feature columns with category filters and explicit per-symbol isolation. |
@@ -39,3 +39,4 @@ Start with `cli.py` to understand the full run sequence.
 - 2026-05-14: Added a config validation stage so bad TOML inputs fail before data loading starts.
 - 2026-05-19: Centralized shared OHLCV column names and SQL identifier rules in `constants.py` so loader, cleaner, engineer, exporter, and validator read the same contract.
 - 2026-06-23: `engineer.py` gained an optional `features.reset_by_session` switch that also isolates features by calendar day, so intraday row-count windows and forward shifts do not cross the overnight gap. `export.py` run summaries now embed the full config snapshot, rows per symbol, and per-feature null/min/mean/max health. `load.py` documents the adjusted-price and exchange-local-timestamp data contract.
+- 2026-08-09: Deduplicated cross-stage contracts: ClickHouse table/session defaults live in `constants.py`, the allowed-session set is derived from the loader's `SESSION_FILTER_SQL` mapping, and the symbol/time sort is one shared helper. `engineer.py` exposes `selected_feature_configs` and `resolve_feature` publicly (engines and the exporter reuse them) and builds the groupby once per run instead of once per feature. `clean.py` combines all rule masks in one pass with no intermediate frame copies; per-rule drop counts are unchanged.

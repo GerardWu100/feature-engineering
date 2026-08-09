@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -33,83 +34,67 @@ def clean_ohlcv(
         drop counts.
     """
     rules = data_quality or {}
-    cleaned = frame.copy()
     report: dict[str, Any] = {
-        "initial_rows": int(len(cleaned)),
+        "initial_rows": len(frame),
         "rules": {},
     }
 
-    # Drop rows with missing numeric OHLCV values first so later comparisons
-    # against thresholds and ranges do not carry NaN-driven ambiguity.
-    cleaned = _apply_drop_rule(
-        cleaned,
-        report,
-        rule_name="drop_missing_numeric_values",
-        enabled=rules.get("drop_missing_numeric_values", True),
-        mask=cleaned[NUMERIC_OHLCV_COLUMNS].isna().any(axis=1),
-        reason="open, high, low, close, and volume must be present",
-    )
+    # Every rule is a per-row predicate, so all masks can be computed against
+    # the original frame and combined in one pass instead of materializing an
+    # intermediate copy of the frame after each rule. Rules run in a fixed
+    # order and each row is attributed to the first rule that would drop it,
+    # which keeps the per-rule counts identical to sequential application.
+    # NaN comparisons are False in pandas, so price rules stay unambiguous even
+    # when the missing-value rule is disabled.
+    rule_definitions: list[tuple[str, Callable[[pd.DataFrame], pd.Series], str]] = [
+        (
+            "drop_missing_numeric_values",
+            lambda f: f[NUMERIC_OHLCV_COLUMNS].isna().any(axis=1),
+            "open, high, low, close, and volume must be present",
+        ),
+        (
+            "drop_zero_prices",
+            lambda f: (f[PRICE_COLUMNS] <= 0).any(axis=1),
+            "open, high, low, and close must be positive prices",
+        ),
+        (
+            "drop_high_lt_low",
+            lambda f: f["high"] < f["low"],
+            "high must be greater than or equal to low",
+        ),
+        (
+            "drop_ohlc_violations",
+            _ohlc_outside_range_mask,
+            "open and close must sit inside the low-high range",
+        ),
+    ]
 
-    # Price-based rules are evaluated after missing-value cleanup so each mask
-    # reflects only concrete numeric rows that can be compared safely.
-    cleaned = _apply_drop_rule(
-        cleaned,
-        report,
-        rule_name="drop_zero_prices",
-        enabled=rules.get("drop_zero_prices", True),
-        mask=(cleaned[PRICE_COLUMNS] <= 0).any(axis=1),
-        reason="open, high, low, and close must be positive prices",
-    )
+    already_dropped = pd.Series(False, index=frame.index)
+    for rule_name, build_mask, reason in rule_definitions:
+        if not rules.get(rule_name, True):
+            report["rules"][rule_name] = {
+                "enabled": False,
+                "dropped": 0,
+                "reason": reason,
+            }
+            continue
 
-    cleaned = _apply_drop_rule(
-        cleaned,
-        report,
-        rule_name="drop_high_lt_low",
-        enabled=rules.get("drop_high_lt_low", True),
-        mask=cleaned["high"] < cleaned["low"],
-        reason="high must be greater than or equal to low",
-    )
+        # Only count rows not already claimed by an earlier rule.
+        new_drops = build_mask(frame) & ~already_dropped
+        report["rules"][rule_name] = {
+            "enabled": True,
+            "dropped": int(new_drops.sum()),
+            "reason": reason,
+        }
+        already_dropped |= new_drops
 
-    cleaned = _apply_drop_rule(
-        cleaned,
-        report,
-        rule_name="drop_ohlc_violations",
-        enabled=rules.get("drop_ohlc_violations", True),
-        mask=_ohlc_outside_range_mask(cleaned),
-        reason="open and close must sit inside the low-high range",
-    )
+    cleaned = frame.loc[~already_dropped].reset_index(drop=True)
 
     # Capture final counts after all enabled rules so downstream logs can show
     # both rule-level drops and overall row retention.
-    report["final_rows"] = int(len(cleaned))
+    report["final_rows"] = len(cleaned)
     report["total_dropped"] = report["initial_rows"] - report["final_rows"]
-    return cleaned.reset_index(drop=True), report
-
-
-def _apply_drop_rule(
-    frame: pd.DataFrame,
-    report: dict[str, Any],
-    *,
-    rule_name: str,
-    enabled: bool,
-    mask: pd.Series,
-    reason: str,
-) -> pd.DataFrame:
-    """Apply one boolean drop rule and record its effect."""
-    if not enabled:
-        report["rules"][rule_name] = {"enabled": False, "dropped": 0, "reason": reason}
-        return frame
-
-    # Align the mask to the current frame because earlier rules may have dropped
-    # rows and changed which labels remain.
-    aligned_mask = mask.reindex(frame.index, fill_value=False)
-    dropped = int(aligned_mask.sum())
-    report["rules"][rule_name] = {
-        "enabled": True,
-        "dropped": dropped,
-        "reason": reason,
-    }
-    return frame.loc[~aligned_mask].copy()
+    return cleaned, report
 
 
 def _ohlc_outside_range_mask(frame: pd.DataFrame) -> pd.Series:

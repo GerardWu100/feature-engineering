@@ -7,9 +7,6 @@
 """
 
 from feature_engineering.engine.batch import FeatureEngine
-from feature_engineering.engine.online import (
-    ONLINE_FEATURE_FACTORIES,
-    OnlineFeatureEngine,
-)
+from feature_engineering.engine.online import OnlineFeatureEngine
 
-__all__ = ["FeatureEngine", "OnlineFeatureEngine", "ONLINE_FEATURE_FACTORIES"]
+__all__ = ["FeatureEngine", "OnlineFeatureEngine"]

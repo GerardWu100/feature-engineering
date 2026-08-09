@@ -152,20 +152,18 @@ def _filter_to_config_window(
 Replace the all-cached branch in `_apply_incremental()` with:
 
 ```python
-    if not new_symbols:
-        # All symbols are already cached, so return the requested symbol/date slice.
-        logger.info(
-            "All symbols cached — returning cache slice, no computation needed."
-        )
-        symbol_slice = existing_df[existing_df["symbol"].isin(config_symbols_set)]
-        result = _filter_to_config_window(
-            df=symbol_slice,
-            asset_class=asset_class,
-            start_date=config_start,
-            end_date=config_end,
-        )
-        result = result.reset_index(drop=True)
-        return result
+if not new_symbols:
+    # All symbols are already cached, so return the requested symbol/date slice.
+    logger.info("All symbols cached — returning cache slice, no computation needed.")
+    symbol_slice = existing_df[existing_df["symbol"].isin(config_symbols_set)]
+    result = _filter_to_config_window(
+        df=symbol_slice,
+        asset_class=asset_class,
+        start_date=config_start,
+        end_date=config_end,
+    )
+    result = result.reset_index(drop=True)
+    return result
 ```
 
 - [ ] **Step 5: Use the helper after partial cache merge**
@@ -450,40 +448,44 @@ git commit -m "docs: repair refactor guide references"
 In `tests/test_config_models.py`, add tests to `TestPipelineConfigValidation`:
 
 ```python
-    def test_pipeline_config_accepts_feature_category_filters(self) -> None:
-        """Feature config may include category include/exclude filters."""
-        raw_config = self._valid_pipeline_config()
-        raw_config["features"]["include_categories"] = ["returns", "trend"]
-        raw_config["features"]["exclude_categories"] = ["target"]
+def test_pipeline_config_accepts_feature_category_filters(self) -> None:
+    """Feature config may include category include/exclude filters."""
+    raw_config = self._valid_pipeline_config()
+    raw_config["features"]["include_categories"] = ["returns", "trend"]
+    raw_config["features"]["exclude_categories"] = ["target"]
 
-        parsed = parse_pipeline_config(raw_config)
-        parsed_dict = parsed.to_dict()
+    parsed = parse_pipeline_config(raw_config)
+    parsed_dict = parsed.to_dict()
 
-        self.assertEqual(
-            parsed_dict["features"]["include_categories"],
-            ["returns", "trend"],
-        )
-        self.assertEqual(
-            parsed_dict["features"]["exclude_categories"],
-            ["target"],
-        )
+    self.assertEqual(
+        parsed_dict["features"]["include_categories"],
+        ["returns", "trend"],
+    )
+    self.assertEqual(
+        parsed_dict["features"]["exclude_categories"],
+        ["target"],
+    )
 
-    def test_pipeline_config_rejects_unknown_feature_category(self) -> None:
-        """Unknown categories should fail before a pipeline run starts."""
-        raw_config = self._valid_pipeline_config()
-        raw_config["features"]["include_categories"] = ["not_a_category"]
 
-        with self.assertRaisesRegex(ConfigValidationError, "not_a_category"):
-            parse_pipeline_config(raw_config)
+def test_pipeline_config_rejects_unknown_feature_category(self) -> None:
+    """Unknown categories should fail before a pipeline run starts."""
+    raw_config = self._valid_pipeline_config()
+    raw_config["features"]["include_categories"] = ["not_a_category"]
 
-    def test_pipeline_config_rejects_category_in_both_include_and_exclude(self) -> None:
-        """A category cannot be both selected and excluded."""
-        raw_config = self._valid_pipeline_config()
-        raw_config["features"]["include_categories"] = ["returns"]
-        raw_config["features"]["exclude_categories"] = ["returns"]
+    with self.assertRaisesRegex(ConfigValidationError, "not_a_category"):
+        parse_pipeline_config(raw_config)
 
-        with self.assertRaisesRegex(ConfigValidationError, "both include_categories and exclude_categories"):
-            parse_pipeline_config(raw_config)
+
+def test_pipeline_config_rejects_category_in_both_include_and_exclude(self) -> None:
+    """A category cannot be both selected and excluded."""
+    raw_config = self._valid_pipeline_config()
+    raw_config["features"]["include_categories"] = ["returns"]
+    raw_config["features"]["exclude_categories"] = ["returns"]
+
+    with self.assertRaisesRegex(
+        ConfigValidationError, "both include_categories and exclude_categories"
+    ):
+        parse_pipeline_config(raw_config)
 ```
 
 If `_valid_pipeline_config()` does not currently include `features`, add only the smallest `features` table needed by the existing test helper style.
@@ -566,7 +568,9 @@ def _validate_category_list(
                 f"Available categories: {sorted(available_categories)}"
             )
         if category in seen:
-            raise ConfigValidationError(f"{label} contains duplicate category '{category}'.")
+            raise ConfigValidationError(
+                f"{label} contains duplicate category '{category}'."
+            )
         seen.add(category)
         categories.append(category)
 
@@ -576,13 +580,15 @@ def _validate_category_list(
 Then call it inside `parse_pipeline_config()`:
 
 ```python
-    features_cfg = raw_config.get("features", {})
-    if features_cfg is not None and not isinstance(features_cfg, Mapping):
-        raise ConfigValidationError("features must be a table if provided.")
-    features_cfg = features_cfg or {}
-    feature_items = features_cfg.get("params", [])
-    include_categories, exclude_categories = _validate_feature_category_filters(features_cfg)
-    features = _validate_feature_entries(feature_items, run.asset_class)
+features_cfg = raw_config.get("features", {})
+if features_cfg is not None and not isinstance(features_cfg, Mapping):
+    raise ConfigValidationError("features must be a table if provided.")
+features_cfg = features_cfg or {}
+feature_items = features_cfg.get("params", [])
+include_categories, exclude_categories = _validate_feature_category_filters(
+    features_cfg
+)
+features = _validate_feature_entries(feature_items, run.asset_class)
 ```
 
 Pass both fields into `PipelineConfig(...)`.
@@ -607,9 +613,9 @@ class TestEngineerCategoryFilters(unittest.TestCase):
 
     def test_compute_features_filters_by_registered_category(self) -> None:
         """Only included categories should appear in the output."""
-        ts = pd.to_datetime(
-            ["2024-01-02 09:30:00", "2024-01-02 09:31:00"]
-        ).tz_localize("America/New_York")
+        ts = pd.to_datetime(["2024-01-02 09:30:00", "2024-01-02 09:31:00"]).tz_localize(
+            "America/New_York"
+        )
         cleaned_df = pd.DataFrame(
             {
                 "symbol": ["AAPL", "AAPL"],
@@ -634,7 +640,12 @@ class TestEngineerCategoryFilters(unittest.TestCase):
                 "exclude_categories": [],
                 "params": [
                     {"name": "log_return", "fn": "log_return", "enabled": True},
-                    {"name": "ma_20", "fn": "moving_average", "window": 20, "enabled": True},
+                    {
+                        "name": "ma_20",
+                        "fn": "moving_average",
+                        "window": 20,
+                        "enabled": True,
+                    },
                 ],
             },
         }

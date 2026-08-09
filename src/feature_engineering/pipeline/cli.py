@@ -6,9 +6,10 @@ import argparse
 import json
 import logging
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 from feature_engineering.pipeline.clean import clean_ohlcv
 from feature_engineering.pipeline.config import validate_config

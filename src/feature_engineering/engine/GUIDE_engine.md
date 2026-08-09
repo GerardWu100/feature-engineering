@@ -53,3 +53,4 @@ one-shot `compute_features` share one code path.
 - 2026-06-23: Added the `engine/` subpackage: `FeatureEngine` (cached batch
   wrapper) and `OnlineFeatureEngine` (O(1) incremental updates). Online
   accumulators are held to the batch math by equivalence tests.
+- 2026-08-09: The engines import the public `selected_feature_configs`/`resolve_feature` from `pipeline/engineer.py` and the shared symbol/time sort helper. `ONLINE_FEATURE_FACTORIES` is no longer re-exported from `engine/__init__.py`; import it from `engine/online.py` if needed. Online NaN handling uses `math.isnan`/`math.nan` directly.

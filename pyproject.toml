@@ -10,12 +10,9 @@ dependencies = [
     "pandas>=3.0.1",
     "pyarrow>=23.0.1",
     "python-dotenv>=1.2.1",
-    "ruff>=0.15.6",
-    "setuptools>=82.0.0",
 ]
 
 [project.scripts]
-feature-engineering = "main:main"
 feature-pipeline = "feature_engineering.pipeline.cli:main"
 
 [build-system]
@@ -24,7 +21,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["main", "run"]
 include-package-data = false
 
 [tool.setuptools.packages.find]

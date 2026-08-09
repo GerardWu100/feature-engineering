@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from typing import Any, Callable, Mapping, Protocol
+from collections.abc import Callable, Mapping
+from typing import Any, Protocol
 
 import pandas as pd
 
@@ -35,22 +36,18 @@ from feature_engineering.features.trend import (
     DEFAULT_MACD_FAST,
     DEFAULT_MACD_SIGNAL,
     DEFAULT_MACD_SLOW,
+    DEFAULT_ROC_PERIODS,
     DEFAULT_RSI_WINDOW,
+    DEFAULT_SMA_WINDOW,
 )
 from feature_engineering.features.volatility import DEFAULT_ATR_WINDOW
+from feature_engineering.pipeline.constants import sort_by_symbol_and_time
 from feature_engineering.pipeline.engineer import (
-    _resolve_feature,
-    _selected_feature_configs,
+    resolve_feature,
+    selected_feature_configs,
 )
 
-NAN = float("nan")
-DEFAULT_SMA_WINDOW = 20
-DEFAULT_ROC_PERIODS = 20
-
-
-def _is_nan(value: float) -> bool:
-    """Return True when ``value`` is NaN (NaN is the only value not equal to itself)."""
-    return value != value
+NAN = math.nan
 
 
 class OnlineFeature(Protocol):
@@ -284,12 +281,12 @@ class _Rsi:
 
         change = close - self._prev
         self._prev = close
-        gain = change if change > 0.0 else 0.0
+        gain = max(0.0, change)
         loss = -change if change < 0.0 else 0.0
 
         average_gain = self._avg_gain.update(gain)
         average_loss = self._avg_loss.update(loss)
-        if _is_nan(average_gain) or _is_nan(average_loss):
+        if math.isnan(average_gain) or math.isnan(average_loss):
             return NAN
         if average_loss == 0.0 and average_gain == 0.0:
             return NAN  # flat window: 0/0 strength ratio is undefined
@@ -331,7 +328,7 @@ class _MacdLine:
     def value(self, close: float) -> float:
         fast_ema = self._fast.update(close)
         slow_ema = self._slow.update(close)
-        if _is_nan(fast_ema) or _is_nan(slow_ema):
+        if math.isnan(fast_ema) or math.isnan(slow_ema):
             return NAN
         return fast_ema - slow_ema
 
@@ -348,7 +345,7 @@ class _MacdSignal:
 
     def value(self, close: float) -> tuple[float, float]:
         macd_line = self._line.value(close)
-        if _is_nan(macd_line):
+        if math.isnan(macd_line):
             return (NAN, NAN)
         # The signal EMA only advances on real MACD values, matching the batch
         # path that drops the MACD line's warmup NaNs before smoothing.
@@ -368,7 +365,7 @@ class _MacdHistogram:
 
     def update(self, bar: Mapping[str, Any]) -> float:
         macd_line, signal = self._signal.value(bar["close"])
-        if _is_nan(macd_line) or _is_nan(signal):
+        if math.isnan(macd_line) or math.isnan(signal):
             return NAN
         return macd_line - signal
 
@@ -400,7 +397,7 @@ class _PriceVsVwap:
 
     def update(self, bar: Mapping[str, Any]) -> float:
         vwap_value = self._vwap.value(bar)
-        if _is_nan(vwap_value):
+        if math.isnan(vwap_value):
             return NAN
         return bar["close"] / vwap_value - 1.0
 
@@ -480,8 +477,8 @@ class OnlineFeatureEngine:
         self._blueprints: list[
             tuple[str, Callable[[dict[str, Any]], OnlineFeature], dict[str, Any]]
         ] = []
-        for feature_item in _selected_feature_configs(config):
-            column_name, spec, params = _resolve_feature(feature_item)
+        for feature_item in selected_feature_configs(config):
+            column_name, spec, params = resolve_feature(feature_item)
             function_name = feature_item["fn"]
             if spec.category == "target":
                 raise ValueError(
@@ -562,7 +559,7 @@ class OnlineFeatureEngine:
             ``symbol``, ``ts``, and one column per configured feature.
         """
         self.reset()
-        sorted_frame = frame.sort_values(["symbol", "ts"]).reset_index(drop=True)
+        sorted_frame = sort_by_symbol_and_time(frame)
         rows: list[dict[str, Any]] = []
         for bar in sorted_frame.to_dict("records"):
             feature_values = self.update(bar)

@@ -31,15 +31,36 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from feature_engineering.pipeline.constants import (
+    DEFAULT_CLICKHOUSE_TABLE,
+    DEFAULT_SESSION,
     NUMERIC_OHLCV_COLUMNS,
     OHLCV_COLUMNS,
     SQL_IDENTIFIER_PATTERN,
+    sort_by_symbol_and_time,
 )
 
 EXTENDED_SESSION_START_MINUTE = 4 * 60
 EXTENDED_SESSION_END_MINUTE = 19 * 60 + 59
 RTH_SESSION_START_MINUTE = 9 * 60 + 30
 RTH_SESSION_END_MINUTE = 15 * 60 + 59
+
+# One SQL filter fragment per supported trading session. Config validation
+# derives its allowed-session set from these keys, so adding a session here is
+# the only edit needed to support it end to end.
+SESSION_FILTER_SQL: dict[str, str] = {
+    # All bars, no time-of-day filter.
+    "full": "",
+    # 04:00 through 19:59, useful for pre-market and after-hours studies.
+    "extended": (
+        "AND (toHour(ts) * 60 + toMinute(ts)) "
+        f"BETWEEN {EXTENDED_SESSION_START_MINUTE} AND {EXTENDED_SESSION_END_MINUTE}"
+    ),
+    # 09:30 through 15:59 regular trading hours.
+    "rth": (
+        "AND (toHour(ts) * 60 + toMinute(ts)) "
+        f"BETWEEN {RTH_SESSION_START_MINUTE} AND {RTH_SESSION_END_MINUTE}"
+    ),
+}
 
 
 def load_ohlcv(config: dict[str, Any]) -> pd.DataFrame:
@@ -48,8 +69,8 @@ def load_ohlcv(config: dict[str, Any]) -> pd.DataFrame:
     Parameters
     ----------
     config
-        Project config. ``config["run"]["source"]`` may be ``csv`` or
-        ``clickhouse``. If omitted, ``clickhouse`` is used.
+        Project config. ``config["run"]["source"]`` must be ``csv`` or
+        ``clickhouse``.
 
     Returns
     -------
@@ -58,7 +79,7 @@ def load_ohlcv(config: dict[str, Any]) -> pd.DataFrame:
         ``low``, ``close``, and ``volume``.
     """
     run_config = config["run"]
-    source = run_config.get("source", "clickhouse")
+    source = run_config["source"]
 
     if source == "csv":
         return _load_csv(run_config)
@@ -84,10 +105,17 @@ def _load_csv(run_config: dict[str, Any]) -> pd.DataFrame:
 def _load_clickhouse(run_config: dict[str, Any]) -> pd.DataFrame:
     """Load OHLCV data from ClickHouse using environment variables."""
     symbols = _validated_symbols(run_config["symbols"])
-    table = _validated_sql_identifier(str(run_config.get("table", "stocks")), "table")
+    table = _validated_sql_identifier(
+        str(run_config.get("table", DEFAULT_CLICKHOUSE_TABLE)), "table"
+    )
     start_date = pd.Timestamp(run_config["start_date"]).date()
     end_date = pd.Timestamp(run_config["end_date"]).date()
-    session_filter = _session_filter_sql(run_config.get("session", "rth"))
+
+    session = run_config.get("session", DEFAULT_SESSION)
+    if session not in SESSION_FILTER_SQL:
+        raise ValueError(f"Unsupported session filter: {session}")
+    session_filter = SESSION_FILTER_SQL[session]
+
     client = _build_clickhouse_client_from_env()
 
     # Regular trading hours are the default because most intraday feature
@@ -132,44 +160,25 @@ def _validated_sql_identifier(value: str, label: str) -> str:
     return value
 
 
-def _session_filter_sql(session: str) -> str:
-    """Return a ClickHouse SQL filter for the requested trading session."""
-    if session == "full":
-        return ""
-
-    if session == "extended":
-        # 04:00 through 19:59, useful for pre-market and after-hours studies.
-        return (
-            "AND (toHour(ts) * 60 + toMinute(ts)) "
-            f"BETWEEN {EXTENDED_SESSION_START_MINUTE} AND {EXTENDED_SESSION_END_MINUTE}"
-        )
-
-    if session == "rth":
-        # 09:30 through 15:59 regular trading hours.
-        return (
-            "AND (toHour(ts) * 60 + toMinute(ts)) "
-            f"BETWEEN {RTH_SESSION_START_MINUTE} AND {RTH_SESSION_END_MINUTE}"
-        )
-
-    raise ValueError(f"Unsupported session filter: {session}")
-
-
 def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFrame:
     """Apply symbol and date filters to a local OHLCV frame."""
-    filtered = frame.copy()
+    filtered = frame
 
     symbols = run_config.get("symbols")
     if symbols:
         # Symbol filtering runs first so date comparisons touch fewer rows.
         filtered = filtered[filtered["symbol"].isin(symbols)]
 
-    if "start_date" in run_config:
-        start = pd.Timestamp(run_config["start_date"]).date()
-        filtered = filtered[filtered["ts"].dt.date >= start]
-
-    if "end_date" in run_config:
-        end = pd.Timestamp(run_config["end_date"]).date()
-        filtered = filtered[filtered["ts"].dt.date <= end]
+    if "start_date" in run_config or "end_date" in run_config:
+        # Calendar-date comparison works for both naive and tz-aware timestamps.
+        # Materialize the date column once and reuse it for both bounds.
+        bar_dates = filtered["ts"].dt.date
+        if "start_date" in run_config:
+            start = pd.Timestamp(run_config["start_date"]).date()
+            filtered = filtered[bar_dates.loc[filtered.index] >= start]
+        if "end_date" in run_config:
+            end = pd.Timestamp(run_config["end_date"]).date()
+            filtered = filtered[bar_dates.loc[filtered.index] <= end]
 
     return filtered
 
@@ -204,10 +213,8 @@ def _finalize_ohlcv_frame(frame: pd.DataFrame) -> pd.DataFrame:
     finalized = frame.loc[:, OHLCV_COLUMNS].copy()
     finalized["ts"] = pd.to_datetime(finalized["ts"])
 
-    numeric_columns = NUMERIC_OHLCV_COLUMNS
-    for column in numeric_columns:
+    for column in NUMERIC_OHLCV_COLUMNS:
         finalized[column] = pd.to_numeric(finalized[column], errors="coerce")
 
     # Stable ordering is a contract for all feature functions.
-    finalized = finalized.sort_values(["symbol", "ts"]).reset_index(drop=True)
-    return finalized
+    return sort_by_symbol_and_time(finalized)

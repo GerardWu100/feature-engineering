@@ -11,6 +11,7 @@ import pandas as pd
 
 from feature_engineering.features.registry import REGISTRY
 from feature_engineering.pipeline.constants import IDENTIFIER_COLUMN_SET
+from feature_engineering.pipeline.engineer import selected_feature_configs
 
 
 def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Path]:
@@ -66,11 +67,9 @@ def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Pa
 
 def build_feature_catalog(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     """Build a small catalog for the feature columns in an exported dataset."""
-    active_by_name = {
-        item["name"]: item
-        for item in config.get("features", {}).get("params", [])
-        if item.get("enabled", True)
-    }
+    # Use the same selection rule as feature computation so the catalog always
+    # describes exactly the columns the pipeline produced.
+    active_by_name = {item["name"]: item for item in selected_feature_configs(config)}
     rows: list[dict[str, Any]] = []
 
     for column in frame.columns:
@@ -158,7 +157,7 @@ def _build_run_summary(
     ]
     return {
         "generated_at": generated_at,
-        "rows": int(len(frame)),
+        "rows": len(frame),
         "columns": list(frame.columns),
         "features": feature_columns,
         # Per-symbol row counts catch silently empty or short tickers.
@@ -189,22 +188,23 @@ def _feature_health(
     Leading nulls from warmup windows are expected; a ``null_count`` equal to
     the row count means the feature produced nothing and should be investigated.
     """
-    total_rows = int(len(frame))
+    total_rows = len(frame)
     health: dict[str, dict[str, Any]] = {}
 
     for column in feature_columns:
         series = frame[column]
         null_count = int(series.isna().sum())
-        non_null = series.dropna()
+        all_null = null_count == total_rows
 
-        # min/mean/max describe the realized value range. They are None when the
-        # column is entirely null so the JSON stays valid and unambiguous.
+        # min/mean/max skip NaN by default, so no filtered copy is needed. They
+        # are None when the column is entirely null so the JSON stays valid and
+        # unambiguous (NaN is not legal JSON).
         health[column] = {
             "null_count": null_count,
             "null_pct": round(null_count / total_rows, 4) if total_rows else None,
-            "min": float(non_null.min()) if not non_null.empty else None,
-            "mean": float(non_null.mean()) if not non_null.empty else None,
-            "max": float(non_null.max()) if not non_null.empty else None,
+            "min": None if all_null else float(series.min()),
+            "mean": None if all_null else float(series.mean()),
+            "max": None if all_null else float(series.max()),
         }
 
     return health

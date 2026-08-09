@@ -8,19 +8,25 @@ dataset.
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import pandas as pd
 
 FeatureCallable = Callable[[pd.DataFrame, dict], pd.Series]
 Lookback = int | Callable[[dict], int]
 
-REGISTRY: dict[str, "FeatureSpec"] = {}
+REGISTRY: dict[str, FeatureSpec] = {}
 
 
 def as_feature_column(values: pd.Series) -> pd.Series:
-    """Return one feature column without a Series name for clean DataFrame joins."""
+    """Return one feature column without a Series name.
+
+    Feature functions return their series through this helper as a contract:
+    the configured column name (not the intermediate pandas name) is the only
+    name a feature value ever carries, both inside the pipeline and for direct
+    callers using feature functions standalone.
+    """
     values.name = None
     return values
 

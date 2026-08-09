@@ -7,11 +7,18 @@ from typing import Any
 import pandas as pd
 
 from feature_engineering.features.registry import REGISTRY
-from feature_engineering.pipeline.constants import SQL_IDENTIFIER_PATTERN
+from feature_engineering.pipeline.constants import (
+    DEFAULT_CLICKHOUSE_TABLE,
+    DEFAULT_SESSION,
+    SQL_IDENTIFIER_PATTERN,
+)
+from feature_engineering.pipeline.load import SESSION_FILTER_SQL
 
 ALLOWED_DATA_SOURCES = {"clickhouse", "csv"}
 ALLOWED_OUTPUT_FORMATS = {"csv", "parquet"}
-ALLOWED_SESSIONS = {"extended", "full", "rth"}
+# Derived from the loader's SQL mapping so validation and loading can never
+# disagree about which sessions exist.
+ALLOWED_SESSIONS = frozenset(SESSION_FILTER_SQL)
 REQUIRED_RUN_KEYS = {"output_dir", "output_formats", "source"}
 POSITIVE_INTEGER_FEATURE_PARAMS = {"bars", "periods", "window"}
 
@@ -153,11 +160,11 @@ def _validate_clickhouse_run_config(run_config: dict[str, Any]) -> None:
     )
     _validate_symbols(run_config["symbols"])
 
-    table = str(run_config.get("table", "stocks"))
+    table = str(run_config.get("table", DEFAULT_CLICKHOUSE_TABLE))
     if not SQL_IDENTIFIER_PATTERN.fullmatch(table):
         raise ConfigValidationError(f"run.table is not a safe SQL identifier: {table}.")
 
-    session = run_config.get("session", "rth")
+    session = run_config.get("session", DEFAULT_SESSION)
     if session not in ALLOWED_SESSIONS:
         allowed_sessions = sorted(ALLOWED_SESSIONS)
         raise ConfigValidationError(f"run.session must be one of {allowed_sessions}.")
