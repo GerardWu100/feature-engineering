@@ -29,20 +29,30 @@ feature-engineering/
 │       │   ├── __init__.py
 │       │   ├── batch.py
 │       │   └── online.py
-│       └── pipeline/
-│           ├── GUIDE_pipeline.md
+│       ├── pipeline/
+│       │   ├── GUIDE_pipeline.md
+│       │   ├── __init__.py
+│       │   ├── cli.py
+│       │   ├── config.py
+│       │   ├── constants.py
+│       │   ├── load.py
+│       │   ├── clean.py
+│       │   ├── engineer.py
+│       │   └── export.py
+│       └── evaluation/
+│           ├── GUIDE_evaluation.md
 │           ├── __init__.py
-│           ├── cli.py
-│           ├── config.py
-│           ├── constants.py
-│           ├── load.py
-│           ├── clean.py
-│           ├── engineer.py
-│           └── export.py
+│           ├── ic.py
+│           ├── regression.py
+│           ├── quantiles.py
+│           ├── summary.py
+│           └── plots.py
 └── tests/
     ├── GUIDE_tests.md
     ├── test_config_validation.py
     ├── test_engines.py
+    ├── test_evaluation.py
+    ├── test_evaluation_plots.py
     ├── test_feature_math.py
     ├── test_simple_pipeline.py
     └── test_simple_project_structure.py
@@ -63,6 +73,7 @@ feature-engineering/
 | `feature_engineering/features/` | Pure categorized feature formulas. |
 | `feature_engineering/engine/` | Cached batch `FeatureEngine` and O(1) incremental `OnlineFeatureEngine`. |
 | `feature_engineering/pipeline/` | Validate config, load, clean, engineer, export workflow. |
+| `feature_engineering/evaluation/` | Feature-versus-target testing: IC, Newey-West regression, quantiles, plots. |
 
 ## Data Flow
 

@@ -22,6 +22,7 @@ exact keys and ``validate_config`` to check a config before use.
 
 from feature_engineering.engine.batch import FeatureEngine
 from feature_engineering.engine.online import OnlineFeatureEngine
+from feature_engineering.evaluation import evaluate_features
 from feature_engineering.features.registry import REGISTRY, FeatureSpec, register
 from feature_engineering.pipeline.clean import clean_ohlcv
 from feature_engineering.pipeline.cli import run_pipeline
@@ -38,6 +39,7 @@ __all__ = [
     "build_feature_catalog",
     "clean_ohlcv",
     "compute_features",
+    "evaluate_features",
     "export_features",
     "load_ohlcv",
     "register",

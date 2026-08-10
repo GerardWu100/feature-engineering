@@ -19,9 +19,14 @@ load data -> clean invalid rows -> compute categorized features -> export files
   - `trend`: direction and momentum (moving average, price vs SMA, rate of change, RSI, MACD line/signal/histogram).
   - `volatility`: price movement size and instability (rolling return std, bar range, ATR).
   - `volume`: trading activity (relative volume, dollar volume, volume change, VWAP, price vs VWAP).
-  - `target`: forward-looking labels for supervised learning (`next_n_bar_return`).
+  - `target`: forward-looking labels for supervised learning
+    (`next_n_bar_return` for direction, `next_n_bar_realized_vol` for
+    volatility: the standard deviation of the next N one-bar log returns).
 - Exports feature data to Parquet and/or CSV.
 - Writes a small `feature_catalog.csv` with feature names, categories, formulas, and descriptions.
+- Evaluates features against targets (`feature_engineering.evaluation`):
+  information coefficients, Newey-West regression, quantile analysis, and
+  plots. See "Testing Features Against Targets" below.
 
 ## Install
 
@@ -85,13 +90,19 @@ feature-engineering/
 │       ├── engine/
 │       │   ├── batch.py
 │       │   └── online.py
-│       └── pipeline/
-│           ├── config.py
-│           ├── load.py
-│           ├── clean.py
-│           ├── engineer.py
-│           ├── export.py
-│           └── cli.py
+│       ├── pipeline/
+│       │   ├── config.py
+│       │   ├── load.py
+│       │   ├── clean.py
+│       │   ├── engineer.py
+│       │   ├── export.py
+│       │   └── cli.py
+│       └── evaluation/
+│           ├── ic.py
+│           ├── regression.py
+│           ├── quantiles.py
+│           ├── summary.py
+│           └── plots.py
 └── tests/
 ```
 
@@ -192,6 +203,60 @@ The online accumulators reproduce the batch feature math exactly; an equivalence
 test in `tests/test_engines.py` enforces it. Forward-looking `target` features
 cannot be served online, so train on batch output (with the target) and serve
 live features without it.
+
+## Testing Features Against Targets
+
+After computing features, `feature_engineering.evaluation` tests whether they
+predict a target. The one-call entry point:
+
+```python
+from feature_engineering import evaluate_features
+
+table = evaluate_features(
+    features,                       # the frame compute_features returned
+    "next_20bar_realized_vol",      # target column to test against
+    target_horizon_bars=20,         # horizon, so inference covers the overlap
+)
+```
+
+The table has one row per feature, ranked by absolute t-statistic:
+
+- `mean_ts_ic`: time-series Spearman information coefficient (rank correlation
+  of feature now vs target later), averaged across symbols. Descriptive.
+- `beta`, `t_stat`, `p_value`: regression of the target on the per-symbol
+  z-scored feature with Newey-West standard errors, which correct for the
+  serial correlation that overlapping forward windows create. This is the
+  significance column.
+- `quantile_spread`: mean target in the top feature quintile minus the bottom.
+
+Screening many features is multiple testing: with 20 features, one t-statistic
+near 2 appears by luck. Treat the table as a ranking, confirm out of sample.
+
+The pieces are importable individually (`time_series_ic`,
+`cross_sectional_ic`, `rolling_ic`, `newey_west_regression`,
+`target_by_feature_quantile`) from `feature_engineering.evaluation`.
+
+Plots, same module:
+
+```python
+from feature_engineering.evaluation import (
+    violin_by_quantile, spread_rows_by_state, rolling_ic_panels,
+)
+
+violin_by_quantile(features, "rolling_std_20", "next_20bar_realized_vol")
+spread_rows_by_state(features, ["rsi_14", "rolling_std_20"], "next_1bar_return")
+rolling_ic_panels(features, ["rsi_14"], "next_1bar_return", window=252)
+```
+
+Each returns a matplotlib figure (pass `save_path=` to also write a PNG):
+
+- `violin_by_quantile`: the target's distribution inside each feature
+  quintile, with the quartile bar and mean dot drawn on top.
+- `spread_rows_by_state`: each feature split into low/neutral/high states, one
+  row per state showing the mean dot, middle-half bar, and 10th-90th line
+  against the all-rows dashed line.
+- `rolling_ic_panels`: trailing-window rank IC through time per feature, with
+  shading where the full-sample sign reverses.
 
 ## Config Validation
 

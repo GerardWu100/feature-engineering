@@ -92,6 +92,14 @@ bars = 1
 enabled = true
 
 [[features.params]]
+name = "next_20bar_realized_vol"
+fn = "next_n_bar_realized_vol"
+# Forward horizon in bars (rows). Target is the standard deviation of the next
+# `bars` one-bar log returns, per-bar decimal units, not annualized. Minimum 2.
+bars = 20
+enabled = true
+
+[[features.params]]
 name = "ma_20"
 fn = "moving_average"
 window = 20

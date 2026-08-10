@@ -14,6 +14,8 @@ The suite uses small toy data so expected values can be checked by hand. It avoi
 | `test_simple_project_structure.py` | Verifies the repo exposes the `feature_engineering` namespace package and the registry categories are small. |
 | `test_feature_math.py` | Checks return, target, trend, volatility, and volume formulas against manual calculations, including leakage-safe target math. |
 | `test_simple_pipeline.py` | Checks CSV loading, OHLCV cleaning, category-filtered feature engineering, symbol-isolated rolling windows, and output writing. |
+| `test_evaluation.py` | Checks IC, Newey-West regression, and quantile statistics against synthetic data with known relationships. |
+| `test_evaluation_plots.py` | Smoke tests: every evaluation figure builds and saves, with panel and label invariants pinned. |
 
 Run everything with:
 
@@ -27,3 +29,4 @@ uv run pytest -q
 - 2026-04-26: Added regression coverage for the namespace layout, missing numeric OHLCV cleaning, volatility window semantics, and microsecond output names.
 - 2026-05-14: Added regression coverage that rolling feature state resets at symbol boundaries.
 - 2026-05-14: Added config validation tests so bad feature names, output formats, category filters, and impossible windows fail at the workflow boundary.
+- 2026-08-10: Added `test_evaluation.py` (IC, Newey-West regression, quantile buckets on synthetic known-relationship data) and `test_evaluation_plots.py` (figure smoke tests), plus forward realized-volatility target math in `test_feature_math.py`.

@@ -6,8 +6,10 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 from feature_engineering.features.returns import (
     log_return,
+    next_n_bar_realized_vol,
     next_n_bar_return,
     simple_return,
 )
@@ -81,6 +83,33 @@ def test_next_n_bar_return_is_forward_simple_return_over_bars() -> None:
     assert math.isclose(two_bar.iloc[2], 106.0 / 103.0 - 1.0)
     assert pd.isna(two_bar.iloc[3])
     assert pd.isna(two_bar.iloc[4])
+
+
+def test_next_n_bar_realized_vol_is_forward_std_of_log_returns() -> None:
+    """Vol target should be std of the next `bars` log returns, NaN at the tail."""
+    frame = _sample_ohlcv_frame()
+    # Closes are [100, 101, 103, 104, 106], so the one-bar log returns are
+    # r_1 = ln(101/100), r_2 = ln(103/101), r_3 = ln(104/103), r_4 = ln(106/104).
+
+    two_bar_vol = next_n_bar_realized_vol(frame, {"bars": 2})
+
+    # Row 0 looks forward at (r_1, r_2); row 2 looks forward at (r_3, r_4).
+    expected_row0 = float(
+        pd.Series([math.log(101.0 / 100.0), math.log(103.0 / 101.0)]).std()
+    )
+    expected_row2 = float(
+        pd.Series([math.log(104.0 / 103.0), math.log(106.0 / 104.0)]).std()
+    )
+    assert math.isclose(two_bar_vol.iloc[0], expected_row0)
+    assert math.isclose(two_bar_vol.iloc[2], expected_row2)
+
+    # The final `bars` rows have incomplete future windows and must be NaN.
+    assert pd.isna(two_bar_vol.iloc[3])
+    assert pd.isna(two_bar_vol.iloc[4])
+
+    # bars = 1 is rejected: the std of a single return is undefined.
+    with pytest.raises(ValueError):
+        next_n_bar_realized_vol(frame, {"bars": 1})
 
 
 def test_trend_features_match_manual_formulas() -> None:

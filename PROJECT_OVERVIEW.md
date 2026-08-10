@@ -12,27 +12,28 @@ validate config -> load data -> clean invalid rows -> compute categorized featur
 
 ## Architecture
 
-The implementation has one project namespace package with two main subpackages:
+The implementation has one project namespace package with four subpackages:
 
 | Package | Responsibility |
 |---|---|
 | `feature_engineering.features/` | Feature formulas grouped by research category. |
 | `feature_engineering.engine/` | Cached batch `FeatureEngine` and O(1) incremental `OnlineFeatureEngine`. |
 | `feature_engineering.pipeline/` | Config validation, data loading, cleaning, feature application, and export. |
+| `feature_engineering.evaluation/` | Feature-versus-target testing: information coefficients, Newey-West regression, quantile analysis, and plots. |
 
-The pipeline does not contain feature math. Feature functions do not load or save files. The engines run the registered features without containing math themselves. This keeps responsibilities easy to trace.
+The pipeline does not contain feature math. Feature functions do not load or save files. The engines run the registered features without containing math themselves. Evaluation consumes the finished feature frame and never computes features. This keeps responsibilities easy to trace.
 
 ## Feature Categories
 
 | Category | Meaning | Examples |
 |---|---|---|
 | `returns` | Price change over time. | `log_return`, `simple_return` |
-| `target` | Forward-looking labels for model training. | `next_n_bar_return` |
+| `target` | Forward-looking labels for model training. | `next_n_bar_return`, `next_n_bar_realized_vol` |
 | `trend` | Direction or momentum. | `moving_average`, `price_vs_sma`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram` |
 | `volatility` | Size and instability of price movement. | `rolling_std`, `bar_range_pct`, `average_true_range` |
 | `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap` |
 
-The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
+The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The volatility target `next_n_bar_realized_vol` is the sample standard deviation of the next `bars` one-bar log returns, so models can predict instability instead of direction. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
 
 ## Feature Engines
 
