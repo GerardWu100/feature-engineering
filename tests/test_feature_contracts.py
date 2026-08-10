@@ -13,7 +13,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-
 from feature_engineering.features.registry import REGISTRY, FeatureSpec
 from feature_engineering.pipeline.engineer import compute_features
 

@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from feature_engineering.pipeline.load import load_ohlcv
 
 
