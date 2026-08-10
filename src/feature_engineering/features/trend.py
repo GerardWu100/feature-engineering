@@ -10,9 +10,8 @@ import pandas as pd
 
 from feature_engineering.features.registry import as_feature_column, register
 
-# Default feature parameters. Named here, next to the batch definitions, and
-# imported by the online engine so both implementations always agree on what an
-# omitted config parameter means. Callers override them through config.
+# Keep defaults next to the batch definitions. The online engine imports the
+# same values, so an omitted configuration parameter has one meaning everywhere.
 DEFAULT_MOVING_AVERAGE_WINDOW = 20
 DEFAULT_RATE_OF_CHANGE_PERIODS = 20
 DEFAULT_RSI_WINDOW = 14
@@ -145,7 +144,7 @@ def _ema(values: pd.Series, span: int) -> pd.Series:
 
 
 def _wilder_average(values: pd.Series, window: int) -> pd.Series:
-    """Wilder's smoothed moving average (a.k.a. RMA) with ``adjust=False``.
+    """Wilder's smoothed moving average with ``adjust=False``.
 
     Wilder smoothing is an EMA with ``alpha = 1 / window``:
 
@@ -164,10 +163,10 @@ def _wilder_average(values: pd.Series, window: int) -> pd.Series:
     calculation="100 - 100 / (1 + avg_gain / avg_loss), Wilder-smoothed over window",
 )
 def relative_strength_index(frame: pd.DataFrame, parameters: dict) -> pd.Series:
-    """Compute Wilder's Relative Strength Index (RSI).
+    """Compute Wilder's Relative Strength Index.
 
-    RSI measures the ratio of average up-moves to average down-moves over a
-    window and maps it to a 0-100 oscillator. Values above 70 are conventionally
+    The Relative Strength Index measures the ratio of average up-moves to
+    average down-moves over a window and maps it to a 0-100 oscillator. Values above 70 are conventionally
     "overbought" and below 30 "oversold".
 
     The leading ``NaN`` price-difference row is dropped before smoothing so the
@@ -208,8 +207,8 @@ def relative_strength_index(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     average_gain = _wilder_average(gain, window)
     average_loss = _wilder_average(loss, window)
 
-    # Relative strength RS = avg_gain / avg_loss; RSI compresses it into 0-100.
-    # When avg_loss is zero, RS is +inf and RSI saturates at 100. When both are
+    # Relative strength = average gain / average loss; RSI compresses it into
+    # 0-100. When average loss is zero, RSI saturates at 100. When both are
     # zero (a flat window), 0/0 is NaN and RSI is undefined.
     relative_strength = average_gain / average_loss
     rsi = 100.0 - 100.0 / (1.0 + relative_strength)

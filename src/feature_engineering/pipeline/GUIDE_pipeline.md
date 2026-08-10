@@ -2,17 +2,39 @@
 
 ## Part 1 - Conceptual Explanation
 
-`pipeline/` owns the simple data workflow:
+`pipeline/` owns the data workflow:
 
 ```text
 config.py -> load.py -> clean.py -> engineer.py -> export.py
 ```
 
-`config.py` validates the parsed TOML dictionary before the workflow starts. It checks the data source, source-specific required keys, output formats, feature names, duplicate enabled output columns, category filters, and positive integer feature parameters. This keeps config-boundary failures in one place.
+`config.py` validates the parsed TOML dictionary before the workflow starts. It
+checks the data source, source-specific required keys, output formats, feature
+names, duplicate enabled output columns, category filters, and positive integer
+feature parameters. Keeping these checks at one boundary gives later stages a
+stable configuration contract.
 
-`load.py` reads OHLCV data from either a local CSV or ClickHouse. ClickHouse values are passed through query parameters, while the table name is validated as a simple SQL identifier before use. Both load paths normalize timestamps to naive exchange-local wall-clock time (`run.exchange_timezone`, default US/Eastern): naive inputs are trusted as already local, timezone-aware inputs are converted. Both paths also validate symbols (stripped, non-empty) and reject duplicate `(symbol, timestamp)` bars, which would otherwise double-count rows inside every rolling window. The `run.session` filter applies to both sources; CSV runs default to `full` because daily files are stamped at midnight, ClickHouse runs default to `regular`. `clean.py` removes rows that violate basic market-data rules, including missing numeric OHLCV values and negative volume. `engineer.py` applies configured feature functions one symbol at a time, using `feature_engineering.features.registry` as the menu. `export.py` writes the dataset, a feature catalog, and a small run summary.
+`load.py` reads OHLCV data from either a local CSV or ClickHouse. ClickHouse
+values are passed through query parameters, while the table name is validated
+as a simple SQL identifier before use. Both paths normalize timestamps to
+naive, exchange-local wall-clock time (`run.exchange_timezone`, default
+US/Eastern). Naive inputs are trusted as local; timezone-aware inputs are
+converted. Both paths strip and validate symbols and reject duplicate
+`(symbol, timestamp)` bars, which would otherwise double-count rows in rolling
+windows. The `run.session` filter applies to both sources. CSV runs default to
+`full` because daily files are stamped at midnight; ClickHouse runs default to
+`regular`.
 
-Per-symbol feature computation is an important time-series boundary. A rolling average, lagged return, or forward target for one ticker must never use another ticker's rows. The engineer stage sorts by symbol and timestamp, keeps `symbol` and `timestamp` as identifiers, then builds each feature column from independent symbol slices before re-aligning the result to the sorted frame.
+`clean.py` removes rows that violate basic market-data rules. `engineer.py`
+applies configured feature functions one symbol at a time, using
+`feature_engineering.features.registry` as the feature menu. `export.py` writes
+the dataset, feature catalog, and run summary.
+
+Per-symbol feature computation is an important time-series boundary. A rolling
+average, lagged return, or forward target for one ticker must never use another
+ticker's rows. The engineer stage sorts by symbol and timestamp, keeps
+`symbol` and `timestamp` as identifiers, computes each feature on independent
+symbol slices, and then aligns the result to the sorted frame.
 
 The pipeline intentionally does not contain feature math. That keeps data movement separate from quantitative formulas.
 

@@ -1,9 +1,9 @@
-"""One-call feature evaluation: a tidy table over many (feature, target) pairs.
+"""One-call feature evaluation: a table over many feature-target pairs.
 
-This is the entry point most research sessions want: "here is my feature frame,
-tell me which features look related to the target and how strongly." It runs
-the IC, Newey-West regression, and quantile-spread checks from the sibling
-modules and returns one row per feature, sorted by absolute t-statistic.
+This is the main entry point for research sessions. It runs the information
+coefficient, panel-robust regression, and quantile-spread checks from the
+sibling modules and returns one row per feature, sorted by absolute
+t-statistic.
 """
 
 from __future__ import annotations

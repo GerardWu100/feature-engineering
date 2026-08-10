@@ -2,7 +2,8 @@
 
 ## Part 1 - Conceptual Explanation
 
-The root folder is intentionally thin. It holds the command wrappers, the single user-facing config, package metadata, tests, and project guides.
+The root folder is intentionally thin. It holds the command wrapper, the single
+user-facing configuration file, package metadata, tests, and project guides.
 
 The main workflow is:
 
@@ -18,9 +19,13 @@ config.toml
   -> outputs/stocks/
 ```
 
-The project now supports one core use case: stock OHLCV feature engineering. Optional subsystems such as options features, transform steps, diagnostics, and backtesting proof-of-concepts were removed so the codebase matches the simpler research workflow.
+The project supports one core use case: stock OHLCV feature engineering. The
+main package does not include options features, transform steps, diagnostics,
+or backtesting prototypes.
 
-`config.toml` is the control surface. It chooses the data source, symbols, date range, output formats, cleaning rules, and feature list. Feature category filters live in `[features]`.
+`config.toml` is the control surface. It chooses the data source, symbols, date
+range, output formats, cleaning rules, and feature list. Feature-category
+filters live in `[features]`.
 
 ## Part 2 - Code Reference
 

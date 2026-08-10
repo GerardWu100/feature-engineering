@@ -1,4 +1,4 @@
-"""Feature evaluation: does a computed feature actually predict its target?
+"""Feature evaluation: does a computed feature contain evidence about its target?
 
 This subpackage sits after feature computation in the research workflow:
 
@@ -19,9 +19,9 @@ It answers three questions about each (feature, target) pair:
 table. ``plots.py`` draws the same evidence: distribution (violin), quantile
 means, spread rows, and rolling IC stability.
 
-All functions take the long feature frame the pipeline produces: one row per
-(symbol, timestamp) with feature and target columns. They never mutate the caller's
-frame.
+All functions take the long feature frame produced by the pipeline: one row per
+``(symbol, timestamp)`` with feature and target columns. They never mutate the
+caller's frame.
 """
 
 from feature_engineering.evaluation.ic import (

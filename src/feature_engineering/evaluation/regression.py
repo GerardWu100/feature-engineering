@@ -1,17 +1,18 @@
-"""Predictive regression of a forward target on a feature, with panel-robust errors.
+"""Predictive regression of a forward target with panel-robust errors.
 
 Why this exists next to the IC functions: a correlation says whether a
 relationship exists; a regression says how large it is in target units and lets
 you test it. Two dependence problems make naive inference wrong here:
 
-1. Overlap through time. Forward targets computed every bar overlap — a 20-bar
+1. Overlap through time. Forward targets computed every bar overlap: a 20-bar
    forward return shares 19 bars with the next row's target — so consecutive
-   errors are serially correlated and ordinary least squares (OLS) standard
+   errors are serially correlated, so ordinary least squares (OLS) standard
    errors are far too small.
 2. Dependence across symbols. Volatility and returns have a large market-common
    component, so two symbols' errors at the same timestamp are correlated.
    Pooling symbols and treating rows as independent shrinks the standard error
-   by roughly sqrt(number of symbols) without adding real information.
+   by roughly the square root of the number of symbols without adding real
+   information.
 
 The fix used here is Driscoll-Kraay standard errors: sum each timestamp's
 score (regressor times residual) across symbols first, then apply the
@@ -57,9 +58,9 @@ class RegressionResult:
         per-timestamp summed scores, robust to serial and cross-symbol
         correlation).
     t_statistic
-        beta / beta_standard_error. Values beyond roughly +-2 are conventionally treated
-        as distinguishable from zero, but remember multiple testing: screening
-        many features guarantees some large t-statistics by chance.
+        beta / beta_standard_error. Values beyond roughly plus or minus 2 are
+        conventionally treated as distinguishable from zero, but screening many
+        features guarantees that some large t-statistics will appear by chance.
     p_value
         Two-sided p-value for beta under the normal approximation.
     alpha
@@ -128,8 +129,8 @@ def newey_west_regression(
     The coefficient is pooled OLS across all symbols; the standard error is
     Driscoll-Kraay (see module docstring), which stays honest when several
     symbols move together and when forward-target windows overlap. Rows are
-    grouped by their ``timestamp`` timestamp internally, so the caller's row order
-    does not affect the result.
+    grouped by ``timestamp`` internally, so the caller's row order does not
+    affect the result.
 
     Parameters
     ----------

@@ -1,12 +1,12 @@
-"""True incremental (online) feature computation for live, bar-by-bar use.
+"""Incremental feature computation for live, bar-by-bar use.
 
 Why this exists
 ---------------
 The batch features in ``feature_engineering.features`` recompute over the whole
-history every call. In a live loop that is O(n) per new bar and O(n^2) over a
-session. This module keeps a small amount of state per symbol and updates each
-feature in O(1) (or O(window) bounded) work per bar, independent of how long the
-session has run.
+history every call. In a live loop, that is linear work per new bar and
+quadratic work over a session. This module keeps a small amount of state per
+symbol and updates each feature in constant time, with memory bounded by its
+configured window.
 
 Design
 ------
@@ -36,9 +36,9 @@ from feature_engineering.features.trend import (
     DEFAULT_MACD_FAST,
     DEFAULT_MACD_SIGNAL,
     DEFAULT_MACD_SLOW,
+    DEFAULT_MOVING_AVERAGE_WINDOW,
     DEFAULT_RATE_OF_CHANGE_PERIODS,
     DEFAULT_RSI_WINDOW,
-    DEFAULT_MOVING_AVERAGE_WINDOW,
 )
 from feature_engineering.features.volatility import DEFAULT_ATR_WINDOW
 from feature_engineering.pipeline.constants import sort_by_symbol_and_time
@@ -82,7 +82,7 @@ class _Ema:
 
 
 class _RollingSum:
-    """Fixed-window running sum over a deque; O(1) per update.
+    """Fixed-window running sum over a deque; constant-time per update.
 
     ``update`` appends a value and drops the oldest once the window length is
     exceeded; it returns nothing. Callers read the running total from ``.sum``
@@ -223,11 +223,12 @@ class _VolumeRatio:
 
 
 class _RollingStd:
-    """Sample std (ddof=1) of log returns over the window's ``window - 1`` returns.
+    """Sample standard deviation of log returns in a fixed price window.
 
-    Maintains running sum and sum of squares of the buffered log returns so each
-    update is O(1). Matches ``volatility.rolling_standard_deviation``: a window of N prices uses
-    the N-1 adjacent returns.
+    Maintains the running sum and sum of squares of buffered log returns, so
+    each update is constant-time. It matches
+    ``volatility.rolling_standard_deviation``: a window of N prices uses the
+    N - 1 adjacent returns and sample standard deviation (degrees of freedom 1).
     """
 
     def __init__(self, window: int) -> None:
@@ -266,7 +267,7 @@ class _RollingStd:
 
 
 class _Rsi:
-    """Wilder's RSI via two Wilder-smoothed averages (alpha = 1 / window)."""
+    """Wilder's Relative Strength Index via two smoothed averages."""
 
     def __init__(self, window: int) -> None:
         self._prev: float | None = None
@@ -297,7 +298,7 @@ class _Rsi:
 
 
 class _Atr:
-    """Wilder's Average True Range (alpha = 1 / window)."""
+    """Wilder's Average True Range with alpha equal to 1 / window."""
 
     def __init__(self, window: int) -> None:
         self._prev_close: float | None = None
@@ -319,7 +320,7 @@ class _Atr:
 
 
 class _MacdLine:
-    """Fast EMA minus slow EMA of close; NaN until both EMAs are valid."""
+    """Moving Average Convergence/Divergence line from two price EMAs."""
 
     def __init__(self, fast: int, slow: int) -> None:
         self._fast = _Ema(2.0 / (fast + 1), fast)
@@ -337,7 +338,7 @@ class _MacdLine:
 
 
 class _MacdSignal:
-    """EMA of the MACD line. Returns the (macd_line, signal) pair internally."""
+    """Exponential moving average of the convergence/divergence line."""
 
     def __init__(self, fast: int, slow: int, signal: int) -> None:
         self._line = _MacdLine(fast, slow)
@@ -358,7 +359,7 @@ class _MacdSignal:
 
 
 class _MacdHistogram:
-    """MACD line minus its signal line."""
+    """Difference between the convergence/divergence line and its signal."""
 
     def __init__(self, fast: int, slow: int, signal: int) -> None:
         self._signal = _MacdSignal(fast, slow, signal)
@@ -371,7 +372,7 @@ class _MacdHistogram:
 
 
 class _Vwap:
-    """Cumulative VWAP within the engine's current session for one symbol."""
+    """Cumulative volume-weighted average price for one symbol and session."""
 
     def __init__(self) -> None:
         self._cumulative_price_volume = 0.0
@@ -402,8 +403,8 @@ class _PriceVsVwap:
         return bar["close"] / vwap_value - 1.0
 
 
-# Map each registry feature function name to a factory that builds its online
-# accumulator from the feature's parameters. Targets are intentionally absent.
+# Map each registry function name to a factory that builds its incremental
+# accumulator from the feature parameters. Forward-looking targets are absent.
 ONLINE_FEATURE_FACTORIES: dict[str, Callable[[dict[str, Any]], OnlineFeature]] = {
     "log_return": lambda parameters: _LogReturn(),
     "simple_return": lambda parameters: _SimpleReturn(),
@@ -474,8 +475,8 @@ class OnlineFeatureEngine:
         features_config = config.get("features", {})
         self._reset_by_session = bool(features_config.get("reset_by_session", False))
 
-        # Blueprint: (column_name, factory, parameters). Built once; used to spin up
-        # fresh accumulators per symbol (and per session when resetting).
+        # Each blueprint is (column name, accumulator factory, parameters). Build
+        # them once, then use them to create fresh state per symbol or session.
         self._blueprints: list[
             tuple[str, Callable[[dict[str, Any]], OnlineFeature], dict[str, Any]]
         ] = []
@@ -495,7 +496,7 @@ class OnlineFeatureEngine:
                 (column_name, ONLINE_FEATURE_FACTORIES[function_name], parameters)
             )
 
-        # Per-symbol state: {symbol: {"accumulators": {column: accumulator}, "date": date}}.
+        # Per-symbol state: {symbol: {"accumulators": {...}, "date": date}}.
         self._state: dict[str, dict[str, Any]] = {}
 
     @property

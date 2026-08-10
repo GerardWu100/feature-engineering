@@ -24,7 +24,7 @@ end_date = "2024-12-31"
 # Trading session filter: "regular" (09:30-15:59), "extended" (04:00-19:59), or
 # "full" (all bars). Applies to both sources. When omitted, ClickHouse runs
 # default to "regular" and CSV runs default to "full" because daily CSV bars are
-# stamped at midnight and an "regular" default would drop them all.
+# stamped at midnight and a "regular" default would drop them all.
 session = "regular"
 
 # IANA timezone of the exchange, used to convert timezone-aware input

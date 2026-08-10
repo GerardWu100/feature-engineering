@@ -94,7 +94,7 @@ def volume_change(frame: pd.DataFrame, parameters: dict) -> pd.Series:
 
 
 def _vwap_series(frame: pd.DataFrame) -> pd.Series:
-    """Return the cumulative Volume Weighted Average Price within the frame.
+    """Return cumulative volume-weighted average price within the frame.
 
     VWAP accumulates from the first row of ``frame`` to each row:
 

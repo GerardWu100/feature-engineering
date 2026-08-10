@@ -1,7 +1,7 @@
 """Volatility features for stock OHLCV data.
 
 Volatility features measure the size and instability of price movement. They do
-not try to predict direction; they describe how noisy or risky the price path is.
+not describe direction; they describe how variable the price path is.
 """
 
 from __future__ import annotations
@@ -94,9 +94,9 @@ DEFAULT_ATR_WINDOW = 14
     ),
 )
 def average_true_range(frame: pd.DataFrame, parameters: dict) -> pd.Series:
-    """Compute Wilder's Average True Range (ATR).
+    """Compute Wilder's Average True Range.
 
-    True Range (TR) for a bar is the largest of three distances:
+    True range for a bar is the largest of three distances:
 
         TR = max(high - low, |high - prev_close|, |low - prev_close|)
 

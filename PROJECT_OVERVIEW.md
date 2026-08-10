@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This project builds categorized stock OHLCV features for quantitative research.
+This project computes categorized stock OHLCV features for quantitative research.
 
-OHLCV means open, high, low, close, and volume. The code intentionally follows one small workflow:
+OHLCV means open, high, low, close, and volume. The code follows one small workflow:
 
 ```text
 validate config -> load data -> clean invalid rows -> compute categorized features -> export files
@@ -12,16 +12,19 @@ validate config -> load data -> clean invalid rows -> compute categorized featur
 
 ## Architecture
 
-The implementation has one project namespace package with four subpackages:
+The implementation has one project package with four subpackages:
 
 | Package | Responsibility |
 |---|---|
 | `feature_engineering.features/` | Feature formulas grouped by research category. |
-| `feature_engineering.engine/` | Cached batch `FeatureEngine` and O(1) incremental `OnlineFeatureEngine`. |
+| `feature_engineering.engine/` | Cached batch `FeatureEngine` and constant-time `OnlineFeatureEngine`. |
 | `feature_engineering.pipeline/` | Config validation, data loading, cleaning, feature application, and export. |
 | `feature_engineering.evaluation/` | Feature-versus-target testing: information coefficients, Newey-West regression, quantile analysis, and plots. |
 
-The pipeline does not contain feature math. Feature functions do not load or save files. The engines run the registered features without containing math themselves. Evaluation consumes the finished feature frame and never computes features. This keeps responsibilities easy to trace.
+The pipeline does not contain feature math. Feature functions do not load or
+save files. The engines run registered features but do not reimplement their
+formulas. Evaluation consumes the finished feature frame and never computes
+features. These boundaries make each stage easy to inspect and test.
 
 ## Feature Categories
 
@@ -37,17 +40,17 @@ The `target` category should usually be excluded from live feature sets because 
 
 ## Feature Engines
 
-Two engines run the registered features for two usage patterns. Neither contains
+Two engines run registered features for two usage patterns. Neither contains
 feature math; both delegate to the formulas in `features/`.
 
 | Engine | Use case | Per-update cost |
 |---|---|---|
 | `FeatureEngine` | Research / backtest. Resolve the config once, then `transform(frame) -> frame` repeatedly. | Vectorized recompute over the frame. |
-| `OnlineFeatureEngine` | Live trading. `update(bar) -> {feature: value}` one bar at a time. | O(1) bounded per bar. |
+| `OnlineFeatureEngine` | Live trading. `update(bar) -> {feature: value}` one bar at a time. | Constant-time work per bar. |
 
-The batch feature functions are the single source of truth for the math. The
-online accumulators are a second, speed-tuned implementation that
-`tests/test_engines.py` holds to the batch values via an equivalence test.
+The batch feature functions are the source of truth for the formulas. The
+online accumulators are a second implementation tuned for speed;
+`tests/test_engines.py` holds them to the batch values with an equivalence test.
 `OnlineFeatureEngine` rejects forward-looking `target` features because they
 need future bars.
 
@@ -58,7 +61,7 @@ The pipeline accepts either:
 - ClickHouse stock OHLCV data from `firstrate.stocks`, or
 - a local CSV with columns `symbol`, `timestamp`, `open`, `high`, `low`, `close`, and `volume`.
 
-The parsed TOML config is validated before data loading. The validator catches
+The parsed TOML configuration is validated before data loading. The validator catches
 unsupported data sources, bad output formats, unknown feature functions,
 duplicate enabled output feature names, unknown category filters, category
 filter overlap, and non-positive integer parameters such as `window`, `periods`,
@@ -81,6 +84,7 @@ Outputs are written to `output_dir` from `config.toml`:
 - Config validation is a boundary check. After it passes, pipeline stages assume required config keys and feature names are valid.
 - Rows are sorted by `symbol` and `timestamp` before feature computation.
 - Cleaning drops clearly invalid OHLCV rows: missing numeric values, non-positive prices, `high < low`, and open/close outside the low-high range.
-- Rolling windows are row-count windows in the simplified project. A 20-row moving average means the previous 20 observed bars for that symbol.
+- Rolling windows count rows. A 20-row moving average means the previous 20
+  observed bars for that symbol.
 - For intraday bars, `features.reset_by_session` also isolates features by calendar day so windows and forward shifts never cross the overnight gap.
 - Data contract: prices are assumed split- and dividend-adjusted, and `timestamp` is assumed to be in the exchange's local wall-clock time (US equities: US/Eastern). The ClickHouse session filter and the intraday reset both rely on the timestamp assumption.

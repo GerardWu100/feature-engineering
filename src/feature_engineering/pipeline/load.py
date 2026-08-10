@@ -216,7 +216,7 @@ def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFra
             filtered = filtered[bar_dates.loc[filtered.index] <= end]
 
     # CSV defaults to "full" (no time-of-day filter) because local files are
-    # often daily bars stamped at midnight, which an "regular" default would drop
+    # often daily bars stamped at midnight, which a "regular" default would drop
     # entirely. An explicit run.session is always honored.
     session = run_config.get("session", DEFAULT_CSV_SESSION)
     filtered = filtered[_session_mask(filtered["timestamp"], session)]

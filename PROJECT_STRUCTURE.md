@@ -1,6 +1,8 @@
 # Project Structure
 
-The project uses a small Python `src/` layout.
+The project uses a small Python `src/` layout: importable code lives under
+`src/feature_engineering/`, while tests and run-time configuration stay at the
+repository root.
 
 ```text
 feature-engineering/
@@ -62,18 +64,18 @@ feature-engineering/
 
 | Path | Purpose |
 |---|---|
-| `run.py` | Root wrapper for the pipeline CLI. |
-| `config.toml` | Single config file for stock OHLCV feature runs. |
-| `pyproject.toml` | Package metadata, dependencies, and console scripts. |
+| `run.py` | Root wrapper for the pipeline command-line interface. |
+| `config.toml` | Single configuration file for stock OHLCV feature runs. |
+| `pyproject.toml` | Package metadata, dependencies, and console-script definitions. |
 
 ## Source Packages
 
 | Package | Responsibility |
 |---|---|
 | `feature_engineering/features/` | Pure categorized feature formulas. |
-| `feature_engineering/engine/` | Cached batch `FeatureEngine` and O(1) incremental `OnlineFeatureEngine`. |
+| `feature_engineering/engine/` | Cached batch `FeatureEngine` and constant-time `OnlineFeatureEngine`. |
 | `feature_engineering/pipeline/` | Validate config, load, clean, engineer, export workflow. |
-| `feature_engineering/evaluation/` | Feature-versus-target testing: IC, Newey-West regression, quantiles, plots. |
+| `feature_engineering/evaluation/` | Feature-versus-target testing: information coefficients, Newey-West regression, quantiles, and plots. |
 
 ## Data Flow
 

@@ -19,10 +19,11 @@ Rank (Spearman) correlation is the default everywhere because features and
 returns are heavy-tailed; a single outlier can dominate a Pearson correlation
 while ranks are unaffected.
 
-A note on significance: the descriptive statistics here (mean IC, IC information ratio) do not
-correct for the serial dependence created by overlapping forward windows. For
-inference use ``regression.newey_west_regression``, which handles that overlap
-through heteroskedasticity- and autocorrelation-consistent standard errors.
+A note on significance: the descriptive statistics here (mean IC and IC
+information ratio) do not correct for the serial dependence created by
+overlapping forward windows. For inference, use
+``regression.newey_west_regression``, which accounts for that overlap with
+heteroskedasticity- and autocorrelation-consistent standard errors.
 """
 
 from __future__ import annotations
@@ -79,7 +80,8 @@ def time_series_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target
+        columns.
     feature
         Feature column name.
     target
@@ -124,7 +126,8 @@ def cross_sectional_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target
+        columns.
     feature
         Feature column name.
     target
@@ -175,7 +178,8 @@ def rolling_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target
+        columns.
     feature
         Feature column name.
     target
@@ -228,7 +232,7 @@ def rolling_ic(
 
 
 def _honest_rolling_rank_corr(x: pd.Series, y: pd.Series, window: int) -> pd.Series:
-    """Spearman correlation over each trailing window, ranks recomputed per window.
+    """Compute Spearman correlation in each trailing window.
 
     Ranking once over the full sample and then rolling a Pearson correlation
     over those ranks looks similar but is a different statistic: a window's
@@ -238,7 +242,8 @@ def _honest_rolling_rank_corr(x: pd.Series, y: pd.Series, window: int) -> pd.Ser
     computes, and leaves NaN where either window has fewer than two distinct
     values (the correlation is undefined there; ordinal tie-breaking would
     instead leak the time position of tied rows into the statistic).
-    Complexity is O(n * window log window), fine for research-scale data.
+    Complexity is O(n * window log window), which is suitable for
+    research-scale data.
     """
     x_values = x.to_numpy(dtype=float)
     y_values = y.to_numpy(dtype=float)
@@ -273,15 +278,16 @@ def ic_summary(ic_values: pd.Series) -> dict[str, float]:
     Returns
     -------
     dict
-        ``mean_ic``: average IC. ``ic_standard_deviation``: standard deviation across
-        observations. ``ic_information_ratio``: information coefficient information ratio,
-        mean_ic / ic_standard_deviation — a signal-to-noise measure of the IC itself.
+        ``mean_ic``: average IC. ``ic_standard_deviation``: standard deviation
+        across observations. ``ic_information_ratio``: mean_ic /
+        ic_standard_deviation, a signal-to-noise measure of the IC itself.
         ``share_positive``: fraction of observations with IC > 0.
         ``observations``: number of IC values summarized.
 
     Notes
     -----
-    The naive t-statistic mean/std*sqrt(n) is deliberately not reported:
+    The naive t-statistic mean / standard_deviation * sqrt(observations) is not
+    reported:
     overlapping forward windows make consecutive IC observations dependent,
     which inflates that t-statistic. Use Newey-West regression for inference.
     """

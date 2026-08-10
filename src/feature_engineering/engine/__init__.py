@@ -1,8 +1,8 @@
-"""Feature engines: cached batch transforms and live incremental updates.
+"""Feature engines for cached batch transforms and live updates.
 
 - ``FeatureEngine`` (``batch.py``): validate/resolve the config once, then
   ``transform(frame) -> frame`` for research and backtesting.
-- ``OnlineFeatureEngine`` (``online.py``): O(1)-per-bar incremental updates for
+- ``OnlineFeatureEngine`` (``online.py``): constant-time incremental updates for
   live trading via ``update(bar) -> {feature: value}``.
 """
 

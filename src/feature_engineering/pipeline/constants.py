@@ -29,7 +29,7 @@ SQL_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 DEFAULT_CLICKHOUSE_TABLE = "stocks"
 DEFAULT_SESSION = "regular"
 
-# CSV files are often daily bars stamped at midnight, which an "regular" default
+# CSV files are often daily bars stamped at midnight, which a "regular" default
 # would drop entirely, so CSV runs apply no session filter unless asked.
 DEFAULT_CSV_SESSION = "full"
 
@@ -41,9 +41,9 @@ DEFAULT_EXCHANGE_TIMEZONE = "America/New_York"
 def sort_by_symbol_and_time(frame: pd.DataFrame) -> pd.DataFrame:
     """Return ``frame`` in the project's canonical row order.
 
-    Sorting by ``symbol`` then ``timestamp`` with a fresh integer index is the ordering
-    contract every feature function relies on. All pipeline stages and engines
-    call this one helper so the contract is defined in exactly one place.
+    Sorting by ``symbol`` then ``timestamp`` with a fresh integer index is the
+    ordering contract every feature function relies on. All pipeline stages and
+    engines call this helper, so the contract is defined in one place.
 
     Parameters
     ----------

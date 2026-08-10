@@ -2,9 +2,9 @@
 
 ``FeatureEngine`` is the convenience wrapper for research and backtesting. It
 resolves the configured feature list once in the constructor and caches the
-result, so a loop that calls ``transform`` on many frames (for example one
-symbol-day at a time in a backtest) does not re-walk and re-validate the config
-on every call.
+result. A loop that calls ``transform`` on many frames (for example one
+symbol-day at a time in a backtest) therefore does not re-walk and re-validate
+the configuration on every call.
 
 For a single one-shot computation, ``feature_engineering.compute_features`` is
 simpler. For live, bar-by-bar streaming use the ``OnlineFeatureEngine`` in
@@ -70,8 +70,9 @@ class FeatureEngine:
         Parameters
         ----------
         frame
-            Clean OHLCV data with ``symbol``, ``timestamp``, and OHLCV columns. It does
-            not need to be pre-sorted; the engine sorts internally.
+            Clean OHLCV data with ``symbol``, ``timestamp``, and OHLCV columns.
+            The frame does not need to be pre-sorted; the engine sorts it
+            internally.
 
         Returns
         -------

@@ -2,7 +2,8 @@
 
 ## Part 1 - Conceptual Explanation
 
-`feature_engineering/` is the project namespace package. It prevents this code from exposing generic top-level import names such as `features` and `pipeline`.
+`feature_engineering/` is the project package. It prevents this code from
+exposing generic top-level import names such as `features` and `pipeline`.
 
 The package has four responsibilities below it:
 
@@ -14,7 +15,14 @@ feature_engineering/
 └── evaluation/
 ```
 
-`features/` contains quantitative formulas. `pipeline/` contains the workflow boundary and data movement: validate config, load OHLCV data, clean invalid rows, compute configured formulas, and write outputs. `engine/` provides two ways to run the registered features: a cached batch `FeatureEngine` for research and a true O(1) `OnlineFeatureEngine` for live, bar-by-bar use. `evaluation/` tests whether computed features predict their targets: information coefficients, Newey-West regression, quantile analysis, a one-call summary table, and plots.
+`features/` contains quantitative formulas. `pipeline/` contains the workflow
+boundary and data movement: validate configuration, load OHLCV data, clean
+invalid rows, compute configured formulas, and write outputs. `engine/` provides
+two ways to run registered features: a cached batch `FeatureEngine` for
+research and a constant-time `OnlineFeatureEngine` for live, bar-by-bar use.
+`evaluation/` tests whether computed features predict their targets with
+information coefficients, Newey-West regression, quantile analysis, a one-call
+summary table, and plots.
 
 This boundary matters when the project is installed or used from notebooks. Python searches import locations in order. A generic import such as `features` can accidentally resolve to another package or local folder. An import such as `feature_engineering.features` points back to this project.
 
@@ -22,7 +30,7 @@ This boundary matters when the project is installed or used from notebooks. Pyth
 
 | Path | Purpose |
 |---|---|
-| `__init__.py` | Marks the project namespace package. |
+| `__init__.py` | Defines the public package exports. |
 | `features/` | Feature formulas and registry metadata. |
 | `engine/` | Cached batch `FeatureEngine` and incremental `OnlineFeatureEngine`. |
 | `pipeline/` | CLI workflow, config validation, loading, cleaning, feature computation, and export. |
@@ -32,7 +40,7 @@ Start with `pipeline/cli.py` for execution flow, then read `features/registry.py
 
 ## Part 3 - Short Journal
 
-- 2026-04-26: Added the `feature_engineering` namespace package to reduce import-name collisions in installed and notebook workflows.
+- 2026-04-26: Added the `feature_engineering` package to reduce import-name collisions in installed and notebook workflows.
 - 2026-05-14: Added an explicit config-validation boundary under `pipeline/`.
-- 2026-06-23: Added the `engine/` subpackage so features can be run as a cached batch transform or as O(1) incremental live updates, alongside the file-writing CLI pipeline.
+- 2026-06-23: Added the `engine/` subpackage so features can be run as a cached batch transform or as constant-time incremental live updates, alongside the file-writing CLI pipeline.
 - 2026-08-10: Added the `evaluation/` subpackage (IC, Newey-West regression, quantile analysis, plots) and the `next_n_bar_realized_volatility` volatility target.

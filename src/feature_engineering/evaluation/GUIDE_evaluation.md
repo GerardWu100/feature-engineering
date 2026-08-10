@@ -3,9 +3,9 @@
 ## Part 1 - Conceptual Explanation
 
 `evaluation/` answers the question that follows feature computation: does a
-feature actually predict its target? It sits after `pipeline/engineer.py` in
-the research workflow and consumes the long feature frame the pipeline
-produces (one row per symbol and timestamp, feature and target columns).
+feature contain evidence about its target? It sits after `pipeline/engineer.py`
+in the research workflow and consumes the long feature frame the pipeline
+produces: one row per symbol and timestamp, with feature and target columns.
 
 Three kinds of evidence, in increasing strictness:
 
@@ -22,32 +22,31 @@ Three kinds of evidence, in increasing strictness:
    timestamps handles serial correlation, with a lag rule that always covers
    the target's mechanical overlap. With one symbol this reduces exactly to
    classic Newey-West.
-3. Shape. A single correlation can hide a relationship that lives only in the
+3. Shape. A single correlation can hide a relationship that exists only in the
    extremes. `quantiles.py` buckets the feature into per-symbol quantiles and
    summarizes the target inside each bucket.
 
-`summary.py` runs all three for many features and returns one ranked table.
-`plots.py` draws the same evidence: a violin per feature quantile, the
-spread-row state chart (mean dot, middle-half bar, 10th-90th line per
-low/neutral/high state — the grammar from the Sun Life assessment submission),
-and stacked rolling-IC stability panels.
+`summary.py` runs all three checks for many features and returns one ranked
+table. `plots.py` shows the same evidence: a violin plot for each feature
+quantile, a state chart with mean, middle-half, and 10th-to-90th ranges, and
+stacked rolling-IC stability panels.
 
 Statistical honesty rules baked in:
 
-- Descriptive IC numbers never claim significance; inference goes through the
-  Newey-West regression only.
+- Descriptive IC numbers do not claim significance; inference goes through the
+  panel-robust regression only.
 - The rolling Spearman recomputes ranks inside every window instead of rolling
   a Pearson correlation over full-sample ranks, because those are different
   statistics.
-- The summary table docstring warns that screening many features is multiple
-  testing: one t-statistic near 2 in 20 features is expected by luck.
+- The summary table warns that screening many features creates a multiple-testing
+  problem: one t-statistic near 2 in 20 features is expected by chance.
 
 ## Part 2 - Code Reference
 
 | Path | Purpose |
 |---|---|
 | `ic.py` | Time-series, cross-sectional, and rolling information coefficients plus `ic_summary`. |
-| `regression.py` | `newey_west_regression` (pooled OLS with Driscoll-Kraay standard errors) and the `default_kernel_lags` rule (max of the size rule and horizon - 1). |
+| `regression.py` | `newey_west_regression` (pooled ordinary least squares with Driscoll-Kraay standard errors) and the `default_kernel_lags` rule (maximum of the size rule and horizon minus 1). |
 | `quantiles.py` | Target summary statistics and raw values per feature quantile bucket. |
 | `summary.py` | `evaluate_features`: one row per feature, ranked by absolute t-statistic. |
 | `plots.py` | `violin_by_quantile`, `spread_rows_by_state`, `rolling_ic_panels`; Okabe-Ito colour convention, figures returned, optional `save_path`. |
