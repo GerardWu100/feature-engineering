@@ -9,8 +9,9 @@ It answers three questions about each (feature, target) pair:
 1. Association: information coefficient (IC), the correlation between the
    feature now and the target later (``ic.py``).
 2. Inference: is the association statistically distinguishable from zero once
-   overlapping forward windows are accounted for? Ordinary least squares with
-   Newey-West standard errors (``regression.py``).
+   overlapping forward windows and cross-symbol co-movement are accounted for?
+   Pooled ordinary least squares with Driscoll-Kraay standard errors
+   (``regression.py``).
 3. Shape: how does the target behave across feature quantile buckets, beyond a
    single correlation number (``quantiles.py``).
 

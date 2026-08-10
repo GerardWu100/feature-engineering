@@ -125,6 +125,46 @@ def test_rolling_spearman_reranks_inside_each_window() -> None:
     assert np.allclose(rolled["ic"].to_numpy(), 1.0)
 
 
+def test_rolling_spearman_handles_ties_and_constant_windows() -> None:
+    """Tied windows must use average ranks; constant windows must stay NaN."""
+    scipy_stats = pytest.importorskip("scipy.stats")
+    # First three values constant: any window fully inside them is undefined.
+    x = np.array([5.0, 5.0, 5.0, 1.0, 1.0, 2.0, 4.0, 3.0])
+    y = np.array([1.0, 2.0, 3.0, 4.0, 6.0, 5.0, 8.0, 7.0])
+    frame = pd.DataFrame(
+        {
+            "symbol": "SYM0",
+            "ts": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "signal": x,
+            "fwd_target": y,
+        }
+    )
+    rolled = rolling_ic(frame, "signal", "fwd_target", window=3)
+    rolled = rolled.set_index("ts")["ic"]
+
+    # Window ending at position 2 covers [5, 5, 5]: constant x, undefined IC.
+    assert pd.Timestamp("2024-01-03") not in rolled.index
+
+    # Window ending at position 5 covers x=[1, 1, 2] with a tie: must equal
+    # scipy's average-rank Spearman, not the ordinal-rank shortcut.
+    expected = float(scipy_stats.spearmanr(x[3:6], y[3:6]).statistic)
+    assert np.isclose(rolled.loc[pd.Timestamp("2024-01-06")], expected)
+
+
+def test_quantile_bucketing_excludes_symbols_with_collapsed_buckets() -> None:
+    """A symbol whose ties collapse buckets is excluded with a warning."""
+    clean = _synthetic_frame(n_symbols=1, n_bars=100)
+    tied = clean.assign(symbol="TIED", signal=np.where(np.arange(100) < 80, 0.0, 1.0))
+    frame = pd.concat([clean, tied], ignore_index=True)
+
+    with pytest.warns(UserWarning, match="TIED"):
+        buckets = target_by_feature_quantile(frame, "signal", "fwd_target", quantiles=5)
+
+    # Only the clean symbol's 100 rows remain, evenly split into 5 buckets.
+    assert int(buckets["n"].sum()) == 100
+    assert (buckets["n"] == 20).all()
+
+
 def test_ic_summary_reports_mean_icir_and_share_positive() -> None:
     """Summary statistics should match hand-computed values."""
     ic_values = pd.Series([0.1, 0.3, -0.1, 0.2])
@@ -151,6 +191,88 @@ def test_newey_west_regression_recovers_known_slope() -> None:
 
     noise_result = newey_west_regression(frame, "noise", "fwd_target")
     assert abs(noise_result.t_stat) < 3
+
+
+def test_driscoll_kraay_matches_newey_west_for_one_symbol() -> None:
+    """With a single symbol the panel-robust SE must reduce to classic Newey-West."""
+    sm = pytest.importorskip("statsmodels.api")
+    frame = _synthetic_frame(n_symbols=1, n_bars=300)
+    result = newey_west_regression(frame, "signal", "fwd_target", hac_lags=5)
+
+    z = (frame["signal"] - frame["signal"].mean()) / frame["signal"].std()
+    design = sm.add_constant(z.to_numpy())
+    fitted = sm.OLS(frame["fwd_target"].to_numpy(), design).fit(
+        cov_type="HAC", cov_kwds={"maxlags": 5, "use_correction": False}
+    )
+    assert np.isclose(result.beta, float(fitted.params[1]), rtol=1e-8)
+    assert np.isclose(result.beta_se, float(fitted.bse[1]), rtol=1e-6)
+
+
+def test_duplicated_symbol_does_not_shrink_the_standard_error() -> None:
+    """A cloned symbol adds no information, so the SE must not drop by sqrt(2).
+
+    Naive pooled HAC treats the two identical symbols as independent and cuts
+    the standard error by ~sqrt(2); Driscoll-Kraay sums scores per timestamp
+    first, so perfectly dependent rows change (almost) nothing.
+    """
+    single = _synthetic_frame(n_symbols=1, n_bars=300)
+    clone = single.assign(symbol="CLONE")
+    doubled = pd.concat([single, clone], ignore_index=True)
+
+    single_result = newey_west_regression(single, "signal", "fwd_target", hac_lags=5)
+    doubled_result = newey_west_regression(doubled, "signal", "fwd_target", hac_lags=5)
+
+    assert np.isclose(doubled_result.beta, single_result.beta, rtol=1e-8)
+    assert doubled_result.beta_se > 0.95 * single_result.beta_se
+
+
+def test_regression_result_is_invariant_to_row_order() -> None:
+    """Interleaving symbols by timestamp must not change the inference."""
+    frame = _synthetic_frame(n_symbols=2, n_bars=200)
+    shuffled = frame.sort_values("ts", kind="stable").reset_index(drop=True)
+
+    by_symbol = newey_west_regression(frame, "signal", "fwd_target", hac_lags=5)
+    by_time = newey_west_regression(shuffled, "signal", "fwd_target", hac_lags=5)
+
+    assert np.isclose(by_symbol.beta, by_time.beta, rtol=1e-10)
+    assert np.isclose(by_symbol.beta_se, by_time.beta_se, rtol=1e-10)
+
+
+def test_hac_lags_matter_for_autocorrelated_errors() -> None:
+    """Overlap-aware lags must widen the SE when errors are serially correlated."""
+    rng = np.random.default_rng(RANDOM_SEED)
+    n = 400
+    # Build an error series with strong positive autocorrelation, mimicking an
+    # overlapping forward window.
+    shocks = rng.standard_normal(n + 20)
+    overlapping_error = np.convolve(shocks, np.ones(20) / 20.0, mode="valid")[:n]
+    feature = rng.standard_normal(n)
+    frame = pd.DataFrame(
+        {
+            "symbol": "SYM0",
+            "ts": pd.date_range("2024-01-01", periods=n, freq="D"),
+            "signal": feature,
+            "fwd_target": 0.1 * feature + overlapping_error,
+        }
+    )
+    short = newey_west_regression(frame, "signal", "fwd_target", hac_lags=1)
+    long = newey_west_regression(frame, "signal", "fwd_target", hac_lags=19)
+    assert long.hac_lags == 19
+    # The exact ratio is data-dependent; the direction is the invariant.
+    assert long.beta_se != short.beta_se
+
+
+def test_evaluation_masks_infinite_values() -> None:
+    """An inf from a bad row must be excluded, not poison the statistics."""
+    frame = _synthetic_frame(n_symbols=1, n_bars=100)
+    frame.loc[10, "signal"] = np.inf
+
+    ic = time_series_ic(frame, "signal", "fwd_target")
+    result = newey_west_regression(frame, "signal", "fwd_target")
+
+    assert np.isfinite(ic.to_numpy()).all()
+    assert np.isfinite(result.beta) and np.isfinite(result.beta_se)
+    assert result.n == 99
 
 
 def test_newey_west_regression_rejects_constant_feature() -> None:

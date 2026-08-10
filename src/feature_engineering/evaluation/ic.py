@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 
 VALID_IC_METHODS = ("spearman", "pearson")
 
@@ -51,14 +52,18 @@ def _paired(frame: pd.DataFrame, feature: str, target: str) -> pd.DataFrame:
 
     Warm-up rows (feature NaN) and end-of-sample rows (forward target NaN)
     carry no information about the relationship, so they are dropped before
-    any correlation.
+    any correlation. Infinities (e.g. a log return over a zero close) survive
+    ``dropna`` and would silently corrupt correlations, so they are masked to
+    NaN first.
     """
     for column in (feature, target):
         if column not in frame.columns:
             raise KeyError(f"Column {column!r} not found in the feature frame.")
-    return frame.loc[:, ["symbol", "ts", feature, target]].dropna(
-        subset=[feature, target]
+    paired = frame.loc[:, ["symbol", "ts", feature, target]].copy()
+    paired[[feature, target]] = paired[[feature, target]].replace(
+        [np.inf, -np.inf], np.nan
     )
+    return paired.dropna(subset=[feature, target])
 
 
 def time_series_ic(
@@ -224,8 +229,12 @@ def _honest_rolling_rank_corr(x: pd.Series, y: pd.Series, window: int) -> pd.Ser
     Ranking once over the full sample and then rolling a Pearson correlation
     over those ranks looks similar but is a different statistic: a window's
     internal ordering, not its position in the full sample, is what Spearman
-    measures. This helper re-ranks inside every window. Complexity is
-    O(n * window log window), fine for research-scale data.
+    measures. This helper re-ranks inside every window with average-tie ranks
+    (``scipy.stats.rankdata``), matching the full-sample Spearman that pandas
+    computes, and leaves NaN where either window has fewer than two distinct
+    values (the correlation is undefined there; ordinal tie-breaking would
+    instead leak the time position of tied rows into the statistic).
+    Complexity is O(n * window log window), fine for research-scale data.
     """
     x_values = x.to_numpy(dtype=float)
     y_values = y.to_numpy(dtype=float)
@@ -235,11 +244,10 @@ def _honest_rolling_rank_corr(x: pd.Series, y: pd.Series, window: int) -> pd.Ser
         start = end - window + 1
         x_window = x_values[start : end + 1]
         y_window = y_values[start : end + 1]
-        # argsort of argsort produces ranks; average-tie handling is skipped
-        # deliberately: exact ties are rare in continuous features, and the
-        # simple version keeps this dependency-free and easy to verify.
-        x_ranks = x_window.argsort().argsort().astype(float)
-        y_ranks = y_window.argsort().argsort().astype(float)
+        if len(np.unique(x_window)) < 2 or len(np.unique(y_window)) < 2:
+            continue
+        x_ranks = rankdata(x_window)
+        y_ranks = rankdata(y_window)
         x_centered = x_ranks - x_ranks.mean()
         y_centered = y_ranks - y_ranks.mean()
         denominator = np.sqrt((x_centered**2).sum() * (y_centered**2).sum())

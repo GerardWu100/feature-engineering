@@ -96,6 +96,26 @@ def test_rolling_ic_panels_one_panel_per_feature(frame: pd.DataFrame, tmp_path) 
     assert len(figure.axes) == 2
 
 
+def test_spread_rows_survives_heavily_tied_feature() -> None:
+    """A tied feature that collapses a tercile bin must degrade, not crash."""
+    rng = np.random.default_rng(RANDOM_SEED)
+    # One symbol, half the values identical: the lower tercile edge collapses,
+    # leaving two bins that map to low/high.
+    tied = np.concatenate([np.zeros(50), np.linspace(1.0, 10.0, 50)])
+    working = pd.DataFrame(
+        {
+            "symbol": "AAA",
+            "ts": pd.date_range("2024-01-01", periods=100, freq="D"),
+            "tied_feature": tied,
+            "fwd_return": rng.standard_normal(100) * 0.02,
+        }
+    )
+
+    figure = spread_rows_by_state(working, ["tied_feature"], "fwd_return")
+    tick_labels = [label.get_text() for label in figure.axes[0].get_yticklabels()]
+    assert tick_labels == ["low", "high"]
+
+
 def test_plot_functions_reject_empty_feature_list(frame: pd.DataFrame) -> None:
     """An empty feature list is a caller mistake and must raise, not draw."""
     with pytest.raises(ValueError):

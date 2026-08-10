@@ -9,10 +9,79 @@ This is also the data behind the violin and quantile plots in ``plots.py``.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
 DEFAULT_QUANTILES = 5
+
+
+def _paired_rows(frame: pd.DataFrame, feature: str, target: str) -> pd.DataFrame:
+    """Return rows where feature and target are both finite.
+
+    Infinities (e.g. a log return over a zero close) survive ``dropna`` and
+    would land in the extreme buckets as if they were real observations, so
+    they are masked to NaN first.
+    """
+    for column in (feature, target):
+        if column not in frame.columns:
+            raise KeyError(f"Column {column!r} not found in the feature frame.")
+    paired = frame.loc[:, ["symbol", feature, target]].copy()
+    paired[[feature, target]] = paired[[feature, target]].replace(
+        [np.inf, -np.inf], np.nan
+    )
+    return paired.dropna(subset=[feature, target])
+
+
+def _bucket_labels(
+    paired: pd.DataFrame,
+    feature: str,
+    *,
+    quantiles: int,
+    by_symbol: bool,
+) -> pd.Series:
+    """Assign each row a 1..quantiles bucket label, or NaN when not comparable.
+
+    Bucket numbers are only comparable across symbols when every symbol formed
+    the full set of ``quantiles`` buckets. When repeated feature values force
+    ``pd.qcut`` to collapse bins for a symbol (``duplicates="drop"``), that
+    symbol's "bucket 3 of 3" would silently pool with other symbols'
+    "bucket 3 of 5" and bias the top-minus-bottom spread. Such symbols are
+    excluded entirely (labels NaN) and a warning reports how many.
+    """
+
+    def _bucket_one_series(values: pd.Series) -> pd.Series:
+        buckets = pd.qcut(values, q=quantiles, labels=False, duplicates="drop")
+        # A collapsed bin count means this symbol's bucket numbers would not
+        # line up with the other symbols'; exclude it rather than mislabel it.
+        if buckets.dropna().nunique() < quantiles:
+            return pd.Series(np.nan, index=values.index)
+        return buckets + 1
+
+    if by_symbol:
+        labels = paired.groupby("symbol")[feature].transform(_bucket_one_series)
+        dropped_symbols = sorted(
+            paired.loc[labels.isna(), "symbol"].unique().tolist()
+        )
+        if dropped_symbols:
+            warnings.warn(
+                f"Feature {feature!r}: {len(dropped_symbols)} symbol(s) "
+                f"({', '.join(map(str, dropped_symbols))}) had too many repeated "
+                f"values to form {quantiles} distinct buckets and were excluded "
+                "from the quantile analysis.",
+                stacklevel=3,
+            )
+        return labels
+
+    labels = _bucket_one_series(paired[feature])
+    if labels.isna().all():
+        warnings.warn(
+            f"Feature {feature!r} has too many repeated values to form "
+            f"{quantiles} distinct buckets; all rows were excluded.",
+            stacklevel=3,
+        )
+    return labels
 
 
 def target_by_feature_quantile(
@@ -39,7 +108,10 @@ def target_by_feature_quantile(
         When ``True`` (default), bucket each symbol against its own history so
         "quantile 5" means "high for that symbol", then pool the buckets. When
         ``False``, bucket the pooled sample directly; only sensible when all
-        symbols share the feature's scale.
+        symbols share the feature's scale. Symbols whose repeated feature
+        values cannot form all ``quantiles`` buckets are excluded with a
+        warning, because their bucket numbers would not line up with the other
+        symbols'.
 
     Returns
     -------
@@ -58,27 +130,16 @@ def target_by_feature_quantile(
     """
     if quantiles < 2:
         raise ValueError("target_by_feature_quantile requires quantiles >= 2.")
-    for column in (feature, target):
-        if column not in frame.columns:
-            raise KeyError(f"Column {column!r} not found in the feature frame.")
 
-    paired = frame.loc[:, ["symbol", feature, target]].dropna(subset=[feature, target])
+    paired = _paired_rows(frame, feature, target)
     if paired.empty:
         raise ValueError(
             f"No rows have both {feature!r} and {target!r}; nothing to bucket."
         )
 
-    def _bucket(values: pd.Series) -> pd.Series:
-        # qcut with duplicates="drop" survives repeated feature values (e.g. a
-        # flag-like feature); labels then run 1..k for the k buckets that exist.
-        buckets = pd.qcut(values, q=quantiles, labels=False, duplicates="drop")
-        return buckets + 1
-
-    if by_symbol:
-        bucket_labels = paired.groupby("symbol")[feature].transform(_bucket)
-    else:
-        bucket_labels = _bucket(paired[feature])
-
+    bucket_labels = _bucket_labels(
+        paired, feature, quantiles=quantiles, by_symbol=by_symbol
+    )
     working = paired.assign(quantile=bucket_labels).dropna(subset=["quantile"])
     if working["quantile"].nunique() < 2:
         raise ValueError(
@@ -133,21 +194,11 @@ def target_values_by_quantile(
     """
     if quantiles < 2:
         raise ValueError("target_values_by_quantile requires quantiles >= 2.")
-    for column in (feature, target):
-        if column not in frame.columns:
-            raise KeyError(f"Column {column!r} not found in the feature frame.")
 
-    paired = frame.loc[:, ["symbol", feature, target]].dropna(subset=[feature, target])
-
-    def _bucket(values: pd.Series) -> pd.Series:
-        buckets = pd.qcut(values, q=quantiles, labels=False, duplicates="drop")
-        return buckets + 1
-
-    if by_symbol:
-        bucket_labels = paired.groupby("symbol")[feature].transform(_bucket)
-    else:
-        bucket_labels = _bucket(paired[feature])
-
+    paired = _paired_rows(frame, feature, target)
+    bucket_labels = _bucket_labels(
+        paired, feature, quantiles=quantiles, by_symbol=by_symbol
+    )
     working = paired.assign(quantile=bucket_labels).dropna(subset=["quantile"])
     return {
         int(bucket): bucket_frame[target].to_numpy(dtype=float)

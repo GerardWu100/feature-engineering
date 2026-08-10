@@ -212,10 +212,14 @@ def violin_by_quantile(
 
 
 def _tercile_states(values: pd.Series) -> pd.Series:
-    """Label each observation low / neutral / high against its own symbol-free series.
+    """Label each observation low / neutral / high against its own series.
 
     Flag-like series (only two distinct values) are labelled off / on instead,
-    because terciles of a 0/1 column are meaningless.
+    because terciles of a 0/1 column are meaningless. Heavily tied continuous
+    series can also collapse tercile edges (``duplicates="drop"``); the
+    surviving bins are then mapped to the outer state names (2 bins ->
+    low/high, 1 bin -> all neutral) instead of crashing on a label-count
+    mismatch.
     """
     distinct = values.dropna().unique()
     if len(distinct) <= 2:
@@ -223,8 +227,15 @@ def _tercile_states(values: pd.Series) -> pd.Series:
         return values.map(
             lambda v: "on" if v == on_value else ("off" if pd.notna(v) else np.nan)
         )
-    buckets = pd.qcut(values, q=3, labels=["low", "neutral", "high"], duplicates="drop")
-    return buckets.astype(object)
+    buckets = pd.qcut(values, q=3, labels=False, duplicates="drop")
+    names_by_bin_count = {
+        3: ("low", "neutral", "high"),
+        2: ("low", "high"),
+        1: ("neutral",),
+    }
+    surviving = int(buckets.dropna().nunique())
+    names = names_by_bin_count[surviving] if surviving in names_by_bin_count else ()
+    return buckets.map(lambda b: names[int(b)] if pd.notna(b) else np.nan)
 
 
 def _spread_row(
@@ -327,11 +338,15 @@ def spread_rows_by_state(
 
         paired = frame.dropna(subset=[feature, target])
         states = paired.groupby("symbol")[feature].transform(_tercile_states)
-        order = (
-            ("off", "on")
-            if set(states.dropna().unique()) <= {"off", "on"}
-            else ("low", "neutral", "high")
-        )
+        # Draw whichever states exist, in a fixed order. Symbols can disagree
+        # (one flag-like, one continuous), so the order is the union of what
+        # the per-symbol labelling produced, never a silent subset.
+        present = set(states.dropna().unique())
+        order = [
+            state
+            for state in ("low", "neutral", "high", "off", "on")
+            if state in present
+        ]
         for state_name in order:
             values = paired.loc[states == state_name, target].to_numpy(dtype=float)
             if len(values) == 0:

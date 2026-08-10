@@ -224,9 +224,10 @@ The table has one row per feature, ranked by absolute t-statistic:
 - `mean_ts_ic`: time-series Spearman information coefficient (rank correlation
   of feature now vs target later), averaged across symbols. Descriptive.
 - `beta`, `t_stat`, `p_value`: regression of the target on the per-symbol
-  z-scored feature with Newey-West standard errors, which correct for the
-  serial correlation that overlapping forward windows create. This is the
-  significance column.
+  z-scored feature with Driscoll-Kraay standard errors (a Newey-West kernel
+  applied to per-timestamp sums), which correct both for the serial
+  correlation that overlapping forward windows create and for symbols moving
+  together at the same time. This is the significance column.
 - `quantile_spread`: mean target in the top feature quintile minus the bottom.
 
 Screening many features is multiple testing: with 20 features, one t-statistic
