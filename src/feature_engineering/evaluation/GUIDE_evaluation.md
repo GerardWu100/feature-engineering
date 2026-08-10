@@ -47,7 +47,7 @@ Statistical honesty rules baked in:
 | Path | Purpose |
 |---|---|
 | `ic.py` | Time-series, cross-sectional, and rolling information coefficients plus `ic_summary`. |
-| `regression.py` | `newey_west_regression` (pooled OLS with Driscoll-Kraay standard errors) and the `default_hac_lags` rule (max of the size rule and horizon - 1). |
+| `regression.py` | `newey_west_regression` (pooled OLS with Driscoll-Kraay standard errors) and the `default_kernel_lags` rule (max of the size rule and horizon - 1). |
 | `quantiles.py` | Target summary statistics and raw values per feature quantile bucket. |
 | `summary.py` | `evaluate_features`: one row per feature, ranked by absolute t-statistic. |
 | `plots.py` | `violin_by_quantile`, `spread_rows_by_state`, `rolling_ic_panels`; Okabe-Ito colour convention, figures returned, optional `save_path`. |
@@ -60,7 +60,7 @@ and `tests/test_evaluation_plots.py`.
 
 - 2026-08-10: Created the subpackage with IC, regression, quantile,
   summary-table, and plotting modules, alongside the new
-  `next_n_bar_realized_vol` volatility target in `features/returns.py`.
+  `next_n_bar_realized_volatility` volatility target in `features/returns.py`.
 - 2026-08-10: Audit-driven corrections in the same session: pooled Newey-West
   replaced with Driscoll-Kraay standard errors (cross-symbol dependence had
   inflated t-statistics), rolling Spearman now uses average-tie ranks and
@@ -68,3 +68,4 @@ and `tests/test_evaluation_plots.py`.
   warning) symbols whose ties collapse buckets, the tercile plot helper
   degrades instead of crashing on heavy ties, and infinities are masked before
   every statistic.
+- 2026-08-10: Spelled out abbreviated result fields: `mean_ts_ic` -> `mean_time_series_ic`, `t_stat` -> `t_statistic`, `beta_se` -> `beta_standard_error`, `std_ic` -> `ic_standard_deviation`, `icir` -> `ic_information_ratio`, `hac_lags` -> `kernel_lags`, `q10`/`q90` -> `percentile_10`/`percentile_90`, `std` -> `standard_deviation`, and `n` -> `observations`.

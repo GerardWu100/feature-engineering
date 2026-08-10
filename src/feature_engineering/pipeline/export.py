@@ -23,7 +23,7 @@ def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Pa
         Engineered feature dataset.
     config
         Config dict with ``run.output_dir``, ``run.output_formats``, and
-        ``features.params``.
+        ``features.parameters``.
 
     Returns
     -------
@@ -79,11 +79,11 @@ def build_feature_catalog(frame: pd.DataFrame, config: dict[str, Any]) -> pd.Dat
         # Resolve registry metadata so the catalog captures both the configured
         # column name and the underlying formula definition.
         item = active_by_name[column]
-        spec = REGISTRY[item["fn"]]
+        spec = REGISTRY[item["function"]]
         rows.append(
             {
                 "name": column,
-                "fn": item["fn"],
+                "function": item["function"],
                 "category": spec.category,
                 "lookback": spec.resolve_lookback(item),
                 "description": spec.description,

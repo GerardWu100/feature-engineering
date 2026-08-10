@@ -21,7 +21,7 @@ from feature_engineering.pipeline.load import load_ohlcv
 def _write_csv(tmp_path: Path, rows: list[str]) -> Path:
     """Write one OHLCV CSV with the standard header plus the given rows."""
     csv_path = tmp_path / "prices.csv"
-    header = "symbol,ts,open,high,low,close,volume"
+    header = "symbol,timestamp,open,high,low,close,volume"
     csv_path.write_text("\n".join([header, *rows]), encoding="utf-8")
     return csv_path
 
@@ -40,8 +40,8 @@ def _csv_config(csv_path: Path, **run_overrides: Any) -> dict[str, Any]:
     return {"run": run_config}
 
 
-def test_rth_session_filter_applies_to_csv_loads(tmp_path: Path) -> None:
-    """An explicit rth session must drop pre-market bars from CSV data."""
+def test_regular_session_filter_applies_to_csv_loads(tmp_path: Path) -> None:
+    """An explicit regular session must drop pre-market bars from CSV data."""
     csv_path = _write_csv(
         tmp_path,
         [
@@ -52,7 +52,7 @@ def test_rth_session_filter_applies_to_csv_loads(tmp_path: Path) -> None:
         ],
     )
 
-    loaded = load_ohlcv(_csv_config(csv_path, session="rth"))
+    loaded = load_ohlcv(_csv_config(csv_path, session="regular"))
 
     assert loaded["close"].tolist() == [100.0, 101.0]
 
@@ -78,7 +78,7 @@ def test_regular_session_uses_exchange_timezone_for_utc_timestamps(
     csv_path = _write_csv(
         tmp_path,
         [
-            # 13:00 UTC is 08:00 New York: pre-market, excluded from rth.
+            # 13:00 UTC is 08:00 New York: pre-market, excluded from regular.
             "AAPL,2024-01-02 13:00:00+00:00,99,100,98,99,900",
             # 14:30 UTC is 09:30 New York: the first regular-session bar.
             "AAPL,2024-01-02 14:30:00+00:00,100,101,99,100,1000",
@@ -87,7 +87,7 @@ def test_regular_session_uses_exchange_timezone_for_utc_timestamps(
         ],
     )
 
-    loaded = load_ohlcv(_csv_config(csv_path, session="rth"))
+    loaded = load_ohlcv(_csv_config(csv_path, session="regular"))
 
     assert loaded["close"].tolist() == [100.0, 101.0]
 
@@ -101,7 +101,7 @@ def test_loaded_timestamps_are_naive_exchange_local(tmp_path: Path) -> None:
 
     loaded = load_ohlcv(_csv_config(csv_path))
 
-    timestamp = loaded["ts"].iloc[0]
+    timestamp = loaded["timestamp"].iloc[0]
     assert timestamp.tzinfo is None
     assert str(timestamp) == "2024-01-02 09:30:00"
 

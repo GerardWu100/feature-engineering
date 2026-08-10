@@ -11,10 +11,10 @@ import re
 import pandas as pd
 
 # Standard loader output columns in stable order.
-OHLCV_COLUMNS = ["symbol", "ts", "open", "high", "low", "close", "volume"]
+OHLCV_COLUMNS = ["symbol", "timestamp", "open", "high", "low", "close", "volume"]
 
 # Identifier columns kept in engineered feature exports.
-IDENTIFIER_COLUMNS = ["symbol", "ts"]
+IDENTIFIER_COLUMNS = ["symbol", "timestamp"]
 IDENTIFIER_COLUMN_SET = set(IDENTIFIER_COLUMNS)
 
 # Price and numeric subsets used by cleaning rules.
@@ -27,9 +27,9 @@ SQL_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Run defaults shared by config validation and data loading, so the two
 # stages cannot silently disagree about what an omitted key means.
 DEFAULT_CLICKHOUSE_TABLE = "stocks"
-DEFAULT_SESSION = "rth"
+DEFAULT_SESSION = "regular"
 
-# CSV files are often daily bars stamped at midnight, which an "rth" default
+# CSV files are often daily bars stamped at midnight, which an "regular" default
 # would drop entirely, so CSV runs apply no session filter unless asked.
 DEFAULT_CSV_SESSION = "full"
 
@@ -41,14 +41,14 @@ DEFAULT_EXCHANGE_TIMEZONE = "America/New_York"
 def sort_by_symbol_and_time(frame: pd.DataFrame) -> pd.DataFrame:
     """Return ``frame`` in the project's canonical row order.
 
-    Sorting by ``symbol`` then ``ts`` with a fresh integer index is the ordering
+    Sorting by ``symbol`` then ``timestamp`` with a fresh integer index is the ordering
     contract every feature function relies on. All pipeline stages and engines
     call this one helper so the contract is defined in exactly one place.
 
     Parameters
     ----------
     frame
-        Any DataFrame containing ``symbol`` and ``ts`` columns.
+        Any DataFrame containing ``symbol`` and ``timestamp`` columns.
 
     Returns
     -------

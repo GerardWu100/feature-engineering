@@ -115,7 +115,7 @@ def target_by_feature_quantile(
     -------
     pandas.DataFrame
         One row per bucket (1 = lowest feature values), columns:
-        ``quantile``, ``n``, ``mean``, ``median``, ``std``, ``q10``, ``q90``
+        ``quantile``, ``observations``, ``mean``, ``median``, ``standard_deviation``, ``percentile_10``, ``percentile_90``
         of the target, and ``feature_min``/``feature_max`` showing the actual
         feature range the bucket covers. The interesting read is whether
         ``mean`` moves monotonically from bucket 1 to bucket ``quantiles``.
@@ -149,12 +149,12 @@ def target_by_feature_quantile(
         target_values = bucket_frame[target]
         return pd.Series(
             {
-                "n": len(bucket_frame),
+                "observations": len(bucket_frame),
                 "mean": float(target_values.mean()),
                 "median": float(target_values.median()),
-                "std": float(target_values.std()),
-                "q10": float(target_values.quantile(0.10)),
-                "q90": float(target_values.quantile(0.90)),
+                "standard_deviation": float(target_values.std()),
+                "percentile_10": float(target_values.quantile(0.10)),
+                "percentile_90": float(target_values.quantile(0.90)),
                 "feature_min": float(bucket_frame[feature].min()),
                 "feature_max": float(bucket_frame[feature].max()),
             }
@@ -164,7 +164,7 @@ def target_by_feature_quantile(
         working.groupby("quantile")
         .apply(_summarize)
         .reset_index()
-        .astype({"quantile": int, "n": int})
+        .astype({"quantile": int, "observations": int})
         .sort_values("quantile", ignore_index=True)
     )
     return summary

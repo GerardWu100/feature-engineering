@@ -37,7 +37,7 @@ class FeatureSpec:
 
     Parameters
     ----------
-    fn
+    function
         Callable that receives one symbol's OHLCV data and a parameter dict.
     category
         Group name used by config filters, such as ``returns`` or ``trend``.
@@ -49,16 +49,16 @@ class FeatureSpec:
         Compact formula or calculation summary for documentation.
     """
 
-    fn: FeatureCallable
+    function: FeatureCallable
     category: str
     lookback: Lookback
     description: str
     calculation: str
 
-    def resolve_lookback(self, params: dict) -> int:
+    def resolve_lookback(self, parameters: dict) -> int:
         """Return the concrete lookback for a configured feature column."""
         if callable(self.lookback):
-            return int(self.lookback(params))
+            return int(self.lookback(parameters))
         return int(self.lookback)
 
 
@@ -71,16 +71,16 @@ def register(
 ) -> Callable[[FeatureCallable], FeatureCallable]:
     """Register a feature function under its Python function name."""
 
-    def decorator(fn: FeatureCallable) -> FeatureCallable:
+    def decorator(function: FeatureCallable) -> FeatureCallable:
         # The function name is the stable config key, for example "log_return".
-        REGISTRY[fn.__name__] = FeatureSpec(
-            fn=fn,
+        REGISTRY[function.__name__] = FeatureSpec(
+            function=function,
             category=category,
             lookback=lookback,
             description=description,
             calculation=calculation,
         )
-        return fn
+        return function
 
     return decorator
 

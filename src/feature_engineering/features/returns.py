@@ -19,23 +19,23 @@ from feature_engineering.features.registry import as_feature_column, register
     description="Natural-log return from one close to the next.",
     calculation="ln(close_t / close_{t-1})",
 )
-def log_return(df: pd.DataFrame, params: dict) -> pd.Series:
+def log_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute one-period log returns from close prices.
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    params
+    parameters
         Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
     pandas.Series
-        Log returns aligned to ``df.index``. The first row is ``NaN`` because
+        Log returns aligned to ``frame.index``. The first row is ``NaN`` because
         there is no previous close.
     """
-    close = df["close"]
+    close = frame["close"]
 
     # Log return is additive through time, which makes it convenient for many
     # statistical models and for tracing multi-period returns.
@@ -48,24 +48,24 @@ def log_return(df: pd.DataFrame, params: dict) -> pd.Series:
     description="Simple percentage return from one close to the next.",
     calculation="close_t / close_{t-1} - 1",
 )
-def simple_return(df: pd.DataFrame, params: dict) -> pd.Series:
+def simple_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute one-period simple returns from close prices.
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    params
+    parameters
         Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
     pandas.Series
-        Simple returns aligned to ``df.index``. The first row is ``NaN``.
+        Simple returns aligned to ``frame.index``. The first row is ``NaN``.
     """
     # pct_change expresses one-step simple return directly:
     # close_t / close_{t-1} - 1.
-    return as_feature_column(df["close"].pct_change())
+    return as_feature_column(frame["close"].pct_change())
 
 
 @register(
@@ -74,7 +74,7 @@ def simple_return(df: pd.DataFrame, params: dict) -> pd.Series:
     description="Forward N-bar simple return target from the current bar close.",
     calculation="close_{t+bars} / close_t - 1",
 )
-def next_n_bar_return(df: pd.DataFrame, params: dict) -> pd.Series:
+def next_n_bar_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute a forward N-bar return target from each current bar.
 
     The horizon is measured in bars (rows), not calendar days. A bar is one row
@@ -86,18 +86,18 @@ def next_n_bar_return(df: pd.DataFrame, params: dict) -> pd.Series:
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time. The
         pipeline guarantees this ordering and per-symbol isolation, so the
         forward shift below never reaches into another ticker's rows.
-    params
+    parameters
         Supports ``bars`` as the positive integer forecast horizon in rows.
         Default is 1.
 
     Returns
     -------
     pandas.Series
-        Forward return target aligned to ``df.index``. The numerator is the
+        Forward return target aligned to ``frame.index``. The numerator is the
         close ``bars`` rows ahead and the denominator is the current row close.
         The final ``bars`` rows are ``NaN`` because the future close is
         unavailable.
@@ -107,11 +107,11 @@ def next_n_bar_return(df: pd.DataFrame, params: dict) -> pd.Series:
     ValueError
         If ``bars`` is less than one.
     """
-    bars = int(params.get("bars", 1))
+    bars = int(parameters.get("bars", 1))
     if bars < 1:
         raise ValueError("next_n_bar_return requires bars >= 1.")
 
-    close = df["close"]
+    close = frame["close"]
 
     # Forward simple return over a fixed number of bars. shift(-bars) brings the
     # future close back to the current row; the last ``bars`` rows become NaN
@@ -123,7 +123,7 @@ def next_n_bar_return(df: pd.DataFrame, params: dict) -> pd.Series:
 
 # Default forward horizon for the realized-volatility target, in bars. Named so
 # callers can discover and override it instead of relying on a hidden number.
-DEFAULT_REALIZED_VOL_BARS = 20
+DEFAULT_REALIZED_VOLATILITY_BARS = 20
 
 
 @register(
@@ -132,7 +132,7 @@ DEFAULT_REALIZED_VOL_BARS = 20
     description="Forward realized volatility: std of the next N one-bar log returns.",
     calculation="std(ln(close_{t+k} / close_{t+k-1}) for k = 1..bars)",
 )
-def next_n_bar_realized_vol(df: pd.DataFrame, params: dict) -> pd.Series:
+def next_n_bar_realized_volatility(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute a forward realized-volatility target from each current bar.
 
     This is the volatility analog of ``next_n_bar_return``: instead of asking
@@ -144,7 +144,7 @@ def next_n_bar_realized_vol(df: pd.DataFrame, params: dict) -> pd.Series:
         where r_{t+k} = ln(close_{t+k} / close_{t+k-1})
 
     The sample standard deviation (ddof = 1) is used so the target matches the
-    backward-looking ``rolling_std`` feature; a model can then be read as
+    backward-looking ``rolling_standard_deviation`` feature; a model can then be read as
     "predict the next window of the same statistic the feature measures over
     the previous window". The value is per-bar volatility in decimal return
     units, not annualized. The horizon is measured in bars (rows), not calendar
@@ -152,19 +152,19 @@ def next_n_bar_realized_vol(df: pd.DataFrame, params: dict) -> pd.Series:
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time. The
         pipeline guarantees per-symbol isolation, so the forward window never
         reaches into another ticker's rows.
-    params
+    parameters
         Supports ``bars``, the positive integer forecast horizon in rows.
-        Default is ``DEFAULT_REALIZED_VOL_BARS``. Must be at least 2 because a
+        Default is ``DEFAULT_REALIZED_VOLATILITY_BARS``. Must be at least 2 because a
         standard deviation of a single return is undefined.
 
     Returns
     -------
     pandas.Series
-        Forward realized volatility aligned to ``df.index``. The final ``bars``
+        Forward realized volatility aligned to ``frame.index``. The final ``bars``
         rows are ``NaN`` because their future returns are incomplete.
 
     Raises
@@ -172,15 +172,15 @@ def next_n_bar_realized_vol(df: pd.DataFrame, params: dict) -> pd.Series:
     ValueError
         If ``bars`` is less than two.
     """
-    bars = int(params.get("bars", DEFAULT_REALIZED_VOL_BARS))
+    bars = int(parameters.get("bars", DEFAULT_REALIZED_VOLATILITY_BARS))
     if bars < 2:
         raise ValueError(
-            "next_n_bar_realized_vol requires bars >= 2 because the standard "
+            "next_n_bar_realized_volatility requires bars >= 2 because the standard "
             "deviation of a single return is undefined."
         )
 
     # One-bar log returns; log returns are used because they add through time.
-    log_returns = np.log(df["close"] / df["close"].shift(1))
+    log_returns = np.log(frame["close"] / frame["close"].shift(1))
 
     # Backward rolling std first, then shift the finished statistic back:
     # backward_std[t] = std(r_{t-bars+1} .. r_t), so backward_std[t + bars]

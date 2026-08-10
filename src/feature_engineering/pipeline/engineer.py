@@ -13,7 +13,7 @@ from feature_engineering.pipeline.constants import (
     sort_by_symbol_and_time,
 )
 
-RESERVED_FEATURE_KEYS = {"name", "fn", "enabled"}
+RESERVED_FEATURE_KEYS = {"name", "function", "enabled"}
 
 
 def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
@@ -24,7 +24,7 @@ def compute_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFram
     frame
         Clean OHLCV data sorted by symbol and timestamp.
     config
-        Config dict containing ``features.params`` entries. Optional
+        Config dict containing ``features.parameters`` entries. Optional
         ``include_categories`` and ``exclude_categories`` lists filter features
         by their registry category. Optional ``features.reset_by_session``
         (bool, default ``False``) makes row-count windows and forward shifts
@@ -72,7 +72,7 @@ def apply_resolved_features(
     sorted_frame
         Clean OHLCV data already sorted by symbol and timestamp.
     resolved_features
-        List of ``(column_name, spec, params)`` tuples from :func:`resolve_feature`.
+        List of ``(column_name, spec, parameters)`` tuples from :func:`resolve_feature`.
     reset_by_session
         When ``True``, isolate features by symbol and calendar day so intraday
         windows do not cross the overnight gap.
@@ -91,13 +91,13 @@ def apply_resolved_features(
     # instead of re-slicing the frame per feature.
     grouped = sorted_frame.groupby(group_keys, sort=False)
 
-    for column_name, spec, params in resolved_features:
+    for column_name, spec, parameters in resolved_features:
         output[column_name] = _compute_feature_series_by_group(
             grouped,
             frame_index=sorted_frame.index,
             feature_name=column_name,
             spec=spec,
-            params=params,
+            parameters=parameters,
         )
 
     return output
@@ -129,7 +129,7 @@ def _feature_group_keys(
 
     # Calendar date of each bar in its own (exchange-local) timestamp. Grouping
     # on this Series resets windows at midnight without adding a stored column.
-    session_date = frame["ts"].dt.normalize()
+    session_date = frame["timestamp"].dt.normalize()
     session_date.name = "_session_date"
     return ["symbol", session_date]
 
@@ -140,7 +140,7 @@ def _compute_feature_series_by_group(
     frame_index: pd.Index,
     feature_name: str,
     spec: FeatureSpec,
-    params: dict[str, Any],
+    parameters: dict[str, Any],
 ) -> pd.Series:
     """Apply one feature function independently within each isolation group.
 
@@ -157,7 +157,7 @@ def _compute_feature_series_by_group(
         feature that produced them.
     spec
         Registry entry holding the concrete feature function and metadata.
-    params
+    parameters
         Function-specific settings from one config item, such as ``window`` or
         ``bars``.
 
@@ -173,7 +173,7 @@ def _compute_feature_series_by_group(
     # Compute each group separately. This makes the isolation rule explicit and
     # avoids hiding the feature call behind a groupby/apply lambda.
     for _group_key, group_frame in grouped:
-        group_values = spec.fn(group_frame, params)
+        group_values = spec.function(group_frame, parameters)
         _validate_feature_result(
             feature_name,
             group_values,
@@ -251,12 +251,12 @@ def selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
 
     # Walk in config order so output column order matches the user's parameter
     # list, which makes export files easier to compare run-to-run.
-    for feature_item in feature_config.get("params", []):
+    for feature_item in feature_config.get("parameters", []):
         if not feature_item.get("enabled", True):
             continue
 
         # Registry metadata supplies the category used by include/exclude rules.
-        spec = REGISTRY[feature_item["fn"]]
+        spec = REGISTRY[feature_item["function"]]
         if not _category_is_selected(
             spec.category,
             include_categories=include_categories,
@@ -291,8 +291,8 @@ def _category_is_selected(
 def resolve_feature(
     feature_config: dict[str, Any],
 ) -> tuple[str, FeatureSpec, dict[str, Any]]:
-    """Look up one feature config entry and split function params from metadata."""
-    function_name = feature_config["fn"]
+    """Look up one feature config entry and split function parameters from metadata."""
+    function_name = feature_config["function"]
     if function_name not in REGISTRY:
         raise KeyError(f"Unknown feature function: {function_name}")
 
@@ -300,9 +300,9 @@ def resolve_feature(
     spec = REGISTRY[function_name]
 
     # Keep only function-specific settings such as ``window`` or ``bars``.
-    params = {
+    parameters = {
         key: value
         for key, value in feature_config.items()
         if key not in RESERVED_FEATURE_KEYS
     }
-    return column_name, spec, params
+    return column_name, spec, parameters

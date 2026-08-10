@@ -16,7 +16,7 @@ from feature_engineering.evaluation.quantiles import target_by_feature_quantile
 from feature_engineering.evaluation.regression import newey_west_regression
 
 # Columns that are identifiers or targets, never candidate features.
-NON_FEATURE_COLUMNS = {"symbol", "ts"}
+NON_FEATURE_COLUMNS = {"symbol", "timestamp"}
 
 
 def evaluate_features(
@@ -32,7 +32,7 @@ def evaluate_features(
     Parameters
     ----------
     frame
-        Long feature frame from the pipeline: ``symbol``, ``ts``, feature
+        Long feature frame from the pipeline: ``symbol``, ``timestamp``, feature
         columns, and at least one forward target column.
     target
         Target column name to evaluate against.
@@ -49,20 +49,20 @@ def evaluate_features(
     Returns
     -------
     pandas.DataFrame
-        One row per feature, sorted by ``abs(t_stat)`` descending, columns:
+        One row per feature, sorted by ``abs(t_statistic)`` descending, columns:
 
         - ``feature``: feature name.
-        - ``mean_ts_ic``: time-series Spearman IC averaged across symbols.
+        - ``mean_time_series_ic``: time-series Spearman IC averaged across symbols.
           Descriptive strength of the rank relationship, in [-1, 1].
         - ``beta``: Newey-West regression slope, target units per one standard
           deviation of the feature.
-        - ``t_stat`` / ``p_value``: Newey-West inference on the slope. This is
+        - ``t_statistic`` / ``p_value``: Newey-West inference on the slope. This is
           the significance column; the IC columns are descriptive.
         - ``r_squared``: in-sample explained variance (usually near zero for
           single features; that is normal).
         - ``quantile_spread``: mean target in the top feature bucket minus the
           bottom bucket. A monotonicity-free measure of economic size.
-        - ``n``: pooled observations used in the regression.
+        - ``observations``: pooled rows used in the regression.
 
     Notes
     -----
@@ -86,7 +86,7 @@ def evaluate_features(
         row: dict[str, object] = {"feature": feature}
 
         per_symbol_ic = time_series_ic(frame, feature, target)
-        row["mean_ts_ic"] = float(per_symbol_ic.mean())
+        row["mean_time_series_ic"] = float(per_symbol_ic.mean())
 
         try:
             regression = newey_west_regression(
@@ -97,16 +97,20 @@ def evaluate_features(
             )
             row.update(
                 beta=regression.beta,
-                t_stat=regression.t_stat,
+                t_statistic=regression.t_statistic,
                 p_value=regression.p_value,
                 r_squared=regression.r_squared,
-                n=regression.n,
+                observations=regression.observations,
             )
         except ValueError:
             # Constant features (or too few rows) have no identified slope;
             # report them as untestable instead of failing the whole table.
             row.update(
-                beta=np.nan, t_stat=np.nan, p_value=np.nan, r_squared=np.nan, n=0
+                beta=np.nan,
+                t_statistic=np.nan,
+                p_value=np.nan,
+                r_squared=np.nan,
+                observations=0,
             )
 
         try:
@@ -123,5 +127,5 @@ def evaluate_features(
 
     table = pd.DataFrame(rows)
     return table.reindex(
-        table["t_stat"].abs().sort_values(ascending=False, na_position="last").index
+        table["t_statistic"].abs().sort_values(ascending=False, na_position="last").index
     ).reset_index(drop=True)

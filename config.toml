@@ -21,11 +21,11 @@ symbols = ["AAPL", "MSFT"]
 start_date = "2023-01-01"
 end_date = "2024-12-31"
 
-# Trading session filter: "rth" (09:30-15:59), "extended" (04:00-19:59), or
+# Trading session filter: "regular" (09:30-15:59), "extended" (04:00-19:59), or
 # "full" (all bars). Applies to both sources. When omitted, ClickHouse runs
-# default to "rth" and CSV runs default to "full" because daily CSV bars are
-# stamped at midnight and an "rth" default would drop them all.
-session = "rth"
+# default to "regular" and CSV runs default to "full" because daily CSV bars are
+# stamped at midnight and an "regular" default would drop them all.
+session = "regular"
 
 # IANA timezone of the exchange, used to convert timezone-aware input
 # timestamps to exchange-local wall-clock time. Naive timestamps are assumed
@@ -74,122 +74,122 @@ reset_by_session = false
 # - volume: trading activity and liquidity features
 # - target: forward-looking labels for supervised learning
 
-[[features.params]]
+[[features.parameters]]
 name = "log_return"
-fn = "log_return"
+function = "log_return"
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "simple_return"
-fn = "simple_return"
+function = "simple_return"
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "next_1bar_return"
-fn = "next_n_bar_return"
+function = "next_n_bar_return"
 # Forecast horizon in bars (rows), not calendar days.
 bars = 1
 enabled = true
 
-[[features.params]]
-name = "next_20bar_realized_vol"
-fn = "next_n_bar_realized_vol"
+[[features.parameters]]
+name = "next_20bar_realized_volatility"
+function = "next_n_bar_realized_volatility"
 # Forward horizon in bars (rows). Target is the standard deviation of the next
 # `bars` one-bar log returns, per-bar decimal units, not annualized. Minimum 2.
 bars = 20
 enabled = true
 
-[[features.params]]
-name = "ma_20"
-fn = "moving_average"
+[[features.parameters]]
+name = "moving_average_20"
+function = "moving_average"
 window = 20
 enabled = true
 
-[[features.params]]
-name = "price_vs_sma_20"
-fn = "price_vs_sma"
+[[features.parameters]]
+name = "price_vs_moving_average_20"
+function = "price_vs_moving_average"
 window = 20
 enabled = true
 
-[[features.params]]
-name = "roc_20"
-fn = "rate_of_change"
+[[features.parameters]]
+name = "rate_of_change_20"
+function = "rate_of_change"
 periods = 20
 enabled = true
 
-[[features.params]]
-name = "rolling_std_20"
-fn = "rolling_std"
+[[features.parameters]]
+name = "rolling_standard_deviation_20"
+function = "rolling_standard_deviation"
 window = 20
 enabled = true
 
-[[features.params]]
-name = "bar_range_pct"
-fn = "bar_range_pct"
+[[features.parameters]]
+name = "bar_range_percent"
+function = "bar_range_percent"
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "volume_ratio_20"
-fn = "volume_ratio"
+function = "volume_ratio"
 window = 20
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "dollar_volume"
-fn = "dollar_volume"
+function = "dollar_volume"
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "volume_change"
-fn = "volume_change"
+function = "volume_change"
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "rsi_14"
-fn = "relative_strength_index"
+function = "relative_strength_index"
 # Wilder smoothing length in bars.
 window = 14
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "atr_14"
-fn = "average_true_range"
+function = "average_true_range"
 # Wilder smoothing length in bars. ATR is in price units (dollars).
 window = 14
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "macd_line"
-fn = "macd_line"
+function = "macd_line"
 # Fast and slow EMA spans (fast must be < slow).
 fast = 12
 slow = 26
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "macd_signal"
-fn = "macd_signal"
+function = "macd_signal"
 fast = 12
 slow = 26
 # EMA span of the MACD line.
 signal = 9
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "macd_histogram"
-fn = "macd_histogram"
+function = "macd_histogram"
 fast = 12
 slow = 26
 signal = 9
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "vwap"
-fn = "vwap"
+function = "vwap"
 # Cumulative within each group. Set reset_by_session = true for session VWAP.
 enabled = true
 
-[[features.params]]
+[[features.parameters]]
 name = "price_vs_vwap"
-fn = "price_vs_vwap"
+function = "price_vs_vwap"
 enabled = true

@@ -36,15 +36,15 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Console log level.",
     )
-    args = parser.parse_args()
+    arguments = parser.parse_args()
 
     logging.basicConfig(
-        level=getattr(logging, args.log_level),
+        level=getattr(logging, arguments.log_level),
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
     try:
-        config = load_config(args.config)
+        config = load_config(arguments.config)
         run_pipeline(config)
     except Exception as exc:
         logging.getLogger(__name__).exception("Pipeline failed: %s", exc)

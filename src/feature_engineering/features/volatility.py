@@ -15,36 +15,36 @@ from feature_engineering.features.trend import _wilder_average
 
 @register(
     category="volatility",
-    lookback=lambda params: params["window"],
+    lookback=lambda parameters: parameters["window"],
     description="Rolling standard deviation of log returns.",
     calculation="std(ln(close_t / close_{t-1})) over trailing window",
 )
-def rolling_std(df: pd.DataFrame, params: dict) -> pd.Series:
+def rolling_standard_deviation(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute rolling standard deviation of log returns.
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with a ``close`` column.
-    params
+    parameters
         Requires ``window``, the number of price rows in the rolling standard
         deviation context.
 
     Returns
     -------
     pandas.Series
-        Rolling sample standard deviation aligned to ``df.index``. For
+        Rolling sample standard deviation aligned to ``frame.index``. For
         ``window=3``, the third price can produce a value from the two returns
         formed by those three prices.
     """
-    window = int(params["window"])
+    window = int(parameters["window"])
     if window < 2:
-        raise ValueError("rolling_std requires window >= 2.")
+        raise ValueError("rolling_standard_deviation requires window >= 2.")
 
     # The first log return is NaN because one price alone cannot form a return.
     # A window of N prices contains N - 1 adjacent returns. The rolling return
     # window therefore uses window - 1 values, not window values.
-    log_returns = np.log(df["close"] / df["close"].shift(1))
+    log_returns = np.log(frame["close"] / frame["close"].shift(1))
     return_window = window - 1
     minimum_returns = max(2, return_window)
     values = log_returns.rolling(
@@ -60,22 +60,22 @@ def rolling_std(df: pd.DataFrame, params: dict) -> pd.Series:
     description="High-low bar range as a fraction of close.",
     calculation="(high_t - low_t) / close_t",
 )
-def bar_range_pct(df: pd.DataFrame, params: dict) -> pd.Series:
+def bar_range_percent(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute intrabar high-low range as a percent of close.
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with ``high``, ``low``, and ``close`` columns.
-    params
+    parameters
         Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
     pandas.Series
-        Range percentages aligned to ``df.index``.
+        Range percentages aligned to ``frame.index``.
     """
-    values = (df["high"] - df["low"]) / df["close"]
+    values = (frame["high"] - frame["low"]) / frame["close"]
     return as_feature_column(values)
 
 
@@ -86,11 +86,14 @@ DEFAULT_ATR_WINDOW = 14
 
 @register(
     category="volatility",
-    lookback=lambda params: int(params.get("window", DEFAULT_ATR_WINDOW)),
+    lookback=lambda parameters: int(parameters.get("window", DEFAULT_ATR_WINDOW)),
     description="Wilder's Average True Range: smoothed bar-to-bar price range.",
-    calculation="Wilder_avg(true_range, window), TR = max(h-l, |h-prev_c|, |l-prev_c|)",
+    calculation=(
+        "Wilder_average(true_range, window), true_range = max("
+        "high - low, |high - previous_close|, |low - previous_close|)"
+    ),
 )
-def average_true_range(df: pd.DataFrame, params: dict) -> pd.Series:
+def average_true_range(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     """Compute Wilder's Average True Range (ATR).
 
     True Range (TR) for a bar is the largest of three distances:
@@ -106,28 +109,28 @@ def average_true_range(df: pd.DataFrame, params: dict) -> pd.Series:
 
     Parameters
     ----------
-    df
+    frame
         Single-symbol OHLCV frame with ``high``, ``low``, and ``close`` columns.
-    params
+    parameters
         Supports ``window`` (default 14), the Wilder smoothing length in bars.
 
     Returns
     -------
     pandas.Series
-        ATR in price units aligned to ``df.index``.
+        ATR in price units aligned to ``frame.index``.
 
     Raises
     ------
     ValueError
         If ``window`` is less than two.
     """
-    window = int(params.get("window", DEFAULT_ATR_WINDOW))
+    window = int(parameters.get("window", DEFAULT_ATR_WINDOW))
     if window < 2:
         raise ValueError("average_true_range requires window >= 2.")
 
-    high = df["high"]
-    low = df["low"]
-    previous_close = df["close"].shift(1)
+    high = frame["high"]
+    low = frame["low"]
+    previous_close = frame["close"].shift(1)
 
     # Three candidate ranges. On the first bar previous_close is NaN, so the two
     # gap terms are NaN and the row-wise max falls back to (high - low).

@@ -28,12 +28,12 @@ The pipeline does not contain feature math. Feature functions do not load or sav
 | Category | Meaning | Examples |
 |---|---|---|
 | `returns` | Price change over time. | `log_return`, `simple_return` |
-| `target` | Forward-looking labels for model training. | `next_n_bar_return`, `next_n_bar_realized_vol` |
-| `trend` | Direction or momentum. | `moving_average`, `price_vs_sma`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram` |
-| `volatility` | Size and instability of price movement. | `rolling_std`, `bar_range_pct`, `average_true_range` |
+| `target` | Forward-looking labels for model training. | `next_n_bar_return`, `next_n_bar_realized_volatility` |
+| `trend` | Direction or momentum. | `moving_average`, `price_vs_moving_average`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram` |
+| `volatility` | Size and instability of price movement. | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range` |
 | `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap` |
 
-The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The volatility target `next_n_bar_realized_vol` is the sample standard deviation of the next `bars` one-bar log returns, so models can predict instability instead of direction. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
+The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The volatility target `next_n_bar_realized_volatility` is the sample standard deviation of the next `bars` one-bar log returns, so models can predict instability instead of direction. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
 
 ## Feature Engines
 
@@ -42,7 +42,7 @@ feature math; both delegate to the formulas in `features/`.
 
 | Engine | Use case | Per-update cost |
 |---|---|---|
-| `FeatureEngine` | Research / backtest. Resolve the config once, then `transform(df) -> df` repeatedly. | Vectorized recompute over the frame. |
+| `FeatureEngine` | Research / backtest. Resolve the config once, then `transform(frame) -> frame` repeatedly. | Vectorized recompute over the frame. |
 | `OnlineFeatureEngine` | Live trading. `update(bar) -> {feature: value}` one bar at a time. | O(1) bounded per bar. |
 
 The batch feature functions are the single source of truth for the math. The
@@ -56,7 +56,7 @@ need future bars.
 The pipeline accepts either:
 
 - ClickHouse stock OHLCV data from `firstrate.stocks`, or
-- a local CSV with columns `symbol`, `ts`, `open`, `high`, `low`, `close`, and `volume`.
+- a local CSV with columns `symbol`, `timestamp`, `open`, `high`, `low`, `close`, and `volume`.
 
 The parsed TOML config is validated before data loading. The validator catches
 unsupported data sources, bad output formats, unknown feature functions,
@@ -79,8 +79,8 @@ Outputs are written to `output_dir` from `config.toml`:
 
 - Features are computed per symbol, so one ticker's history never enters another ticker's feature values.
 - Config validation is a boundary check. After it passes, pipeline stages assume required config keys and feature names are valid.
-- Rows are sorted by `symbol` and `ts` before feature computation.
+- Rows are sorted by `symbol` and `timestamp` before feature computation.
 - Cleaning drops clearly invalid OHLCV rows: missing numeric values, non-positive prices, `high < low`, and open/close outside the low-high range.
 - Rolling windows are row-count windows in the simplified project. A 20-row moving average means the previous 20 observed bars for that symbol.
 - For intraday bars, `features.reset_by_session` also isolates features by calendar day so windows and forward shifts never cross the overnight gap.
-- Data contract: prices are assumed split- and dividend-adjusted, and `ts` is assumed to be in the exchange's local wall-clock time (US equities: US/Eastern). The ClickHouse session filter and the intraday reset both rely on the timestamp assumption.
+- Data contract: prices are assumed split- and dividend-adjusted, and `timestamp` is assumed to be in the exchange's local wall-clock time (US equities: US/Eastern). The ClickHouse session filter and the intraday reset both rely on the timestamp assumption.

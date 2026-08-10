@@ -52,12 +52,12 @@ class RegressionResult:
     beta
         Slope: expected target change per one standard deviation of the
         feature. In the target's units (decimal return or decimal volatility).
-    beta_se
+    beta_standard_error
         Driscoll-Kraay standard error of the slope (Newey-West kernel over
         per-timestamp summed scores, robust to serial and cross-symbol
         correlation).
-    t_stat
-        beta / beta_se. Values beyond roughly +-2 are conventionally treated
+    t_statistic
+        beta / beta_standard_error. Values beyond roughly +-2 are conventionally treated
         as distinguishable from zero, but remember multiple testing: screening
         many features guarantees some large t-statistics by chance.
     p_value
@@ -68,23 +68,23 @@ class RegressionResult:
         In-sample fraction of target variance explained. For single features
         on noisy financial targets, values near zero are normal; the t-stat,
         not the R-squared, is the decision number.
-    n
-        Number of pooled observations used.
-    hac_lags
+    observations
+        Number of pooled rows used.
+    kernel_lags
         Newey-West truncation lag actually used by the kernel.
     """
 
     beta: float
-    beta_se: float
-    t_stat: float
+    beta_standard_error: float
+    t_statistic: float
     p_value: float
     alpha: float
     r_squared: float
-    n: int
-    hac_lags: int
+    observations: int
+    kernel_lags: int
 
 
-def default_hac_lags(n: int, *, target_horizon_bars: int | None = None) -> int:
+def default_kernel_lags(n: int, *, target_horizon_bars: int | None = None) -> int:
     """Choose a Newey-West truncation lag.
 
     Two considerations, take the larger:
@@ -97,7 +97,7 @@ def default_hac_lags(n: int, *, target_horizon_bars: int | None = None) -> int:
 
     Parameters
     ----------
-    n
+    observations
         Number of time periods available to the kernel (distinct timestamps,
         not pooled rows).
     target_horizon_bars
@@ -119,7 +119,7 @@ def newey_west_regression(
     feature: str,
     target: str,
     *,
-    hac_lags: int | None = None,
+    kernel_lags: int | None = None,
     target_horizon_bars: int | None = None,
     standardize: bool = True,
 ) -> RegressionResult:
@@ -128,13 +128,13 @@ def newey_west_regression(
     The coefficient is pooled OLS across all symbols; the standard error is
     Driscoll-Kraay (see module docstring), which stays honest when several
     symbols move together and when forward-target windows overlap. Rows are
-    grouped by their ``ts`` timestamp internally, so the caller's row order
+    grouped by their ``timestamp`` timestamp internally, so the caller's row order
     does not affect the result.
 
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``ts``, feature, and target
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target
         columns. Rows from all symbols are pooled after per-symbol
         standardization. Rows with non-finite feature or target values
         (NaN or infinity, e.g. from a log return over a zero close) are
@@ -143,13 +143,13 @@ def newey_west_regression(
         Feature column name (the predictor).
     target
         Forward target column name (the outcome).
-    hac_lags
+    kernel_lags
         Newey-West truncation lag for the kernel. ``None`` (default) chooses
-        automatically via :func:`default_hac_lags` on the number of distinct
+        automatically via :func:`default_kernel_lags` on the number of distinct
         timestamps.
     target_horizon_bars
         Forward horizon of the target in bars, e.g. 20 for
-        ``next_20bar_realized_vol``. Only used when ``hac_lags`` is ``None``,
+        ``next_20bar_realized_volatility``. Only used when ``kernel_lags`` is ``None``,
         to make sure the automatic lag covers the mechanical overlap.
     standardize
         When ``True`` (default), z-score the feature within each symbol so the
@@ -169,11 +169,11 @@ def newey_west_regression(
         If fewer than 3 paired observations remain, or the feature is constant
         (zero variance) so no slope is identified.
     """
-    for column in ("ts", feature, target):
+    for column in ("timestamp", feature, target):
         if column not in frame.columns:
             raise KeyError(f"Column {column!r} not found in the feature frame.")
 
-    paired = frame.loc[:, ["symbol", "ts", feature, target]].copy()
+    paired = frame.loc[:, ["symbol", "timestamp", feature, target]].copy()
     # Infinities (e.g. a log return over a zero close) survive dropna, then
     # silently poison the fit, so mask them to NaN before pairing.
     paired[[feature, target]] = paired[[feature, target]].replace(
@@ -202,7 +202,7 @@ def newey_west_regression(
 
     regression_frame = pd.DataFrame(
         {
-            "ts": paired["ts"],
+            "timestamp": paired["timestamp"],
             "predictor": predictor,
             "outcome": paired[target],
         }
@@ -214,30 +214,30 @@ def newey_west_regression(
         )
 
     n = len(regression_frame)
-    n_timestamps = int(regression_frame["ts"].nunique())
+    n_timestamps = int(regression_frame["timestamp"].nunique())
     lags = (
-        int(hac_lags)
-        if hac_lags is not None
-        else default_hac_lags(n_timestamps, target_horizon_bars=target_horizon_bars)
+        int(kernel_lags)
+        if kernel_lags is not None
+        else default_kernel_lags(n_timestamps, target_horizon_bars=target_horizon_bars)
     )
 
     beta_vector, standard_errors, r_squared = _driscoll_kraay_ols(
         regression_frame, lags=lags
     )
     beta = float(beta_vector[1])
-    beta_se = float(standard_errors[1])
-    t_stat = beta / beta_se
-    p_value = float(2.0 * stats.norm.sf(abs(t_stat)))
+    beta_standard_error = float(standard_errors[1])
+    t_statistic = beta / beta_standard_error
+    p_value = float(2.0 * stats.norm.sf(abs(t_statistic)))
 
     return RegressionResult(
         beta=beta,
-        beta_se=beta_se,
-        t_stat=t_stat,
+        beta_standard_error=beta_standard_error,
+        t_statistic=t_statistic,
         p_value=p_value,
         alpha=float(beta_vector[0]),
         r_squared=r_squared,
-        n=n,
-        hac_lags=lags,
+        observations=n,
+        kernel_lags=lags,
     )
 
 
@@ -257,7 +257,7 @@ def _driscoll_kraay_ols(
     Parameters
     ----------
     regression_frame
-        Columns ``ts``, ``predictor``, ``outcome``; rows already filtered to
+        Columns ``timestamp``, ``predictor``, ``outcome``; rows already filtered to
         finite values.
     lags
         Bartlett kernel truncation lag, in timestamps.
@@ -292,7 +292,7 @@ def _driscoll_kraay_ols(
     # symbols traded, so contemporaneous cross-symbol correlation is inside
     # h_t rather than wrongly treated as independent information.
     scores = design * residuals[:, np.newaxis]
-    score_frame = pd.DataFrame(scores, index=regression_frame["ts"].to_numpy())
+    score_frame = pd.DataFrame(scores, index=regression_frame["timestamp"].to_numpy())
     summed_scores = score_frame.groupby(level=0).sum().sort_index().to_numpy()
 
     n_timestamps = len(summed_scores)

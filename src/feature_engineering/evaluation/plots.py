@@ -65,6 +65,8 @@ def _target_colour(target: str) -> str:
     Keeping the two target families in different hues means a return claim and
     a volatility claim can never be confused across figures.
     """
+    # Substring match so both "realized_volatility" and shorter names a
+    # caller may have chosen are recognized as volatility targets.
     return VOLATILITY_COLOUR if "vol" in target.lower() else HIGH_COLOUR
 
 
@@ -416,7 +418,7 @@ def rolling_ic_panels(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``ts``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
     features
         Feature columns to draw, one stacked panel each, shared time axis.
     target
@@ -451,7 +453,7 @@ def rolling_ic_panels(
 
         for _symbol, symbol_rows in rolled.groupby("symbol"):
             panel.plot(
-                symbol_rows["ts"],
+                symbol_rows["timestamp"],
                 symbol_rows["ic"],
                 linewidth=1.5,
                 color=colour,
@@ -462,7 +464,7 @@ def rolling_ic_panels(
             last = symbol_rows.iloc[-1]
             panel.annotate(
                 str(last["symbol"]),
-                xy=(last["ts"], last["ic"]),
+                xy=(last["timestamp"], last["ic"]),
                 xytext=(4, 0),
                 textcoords="offset points",
                 fontsize=8.5,

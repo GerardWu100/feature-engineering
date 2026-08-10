@@ -34,11 +34,11 @@ def _valid_csv_config() -> dict:
         "features": {
             "include_categories": [],
             "exclude_categories": [],
-            "params": [
-                {"name": "log_return", "fn": "log_return", "enabled": True},
+            "parameters": [
+                {"name": "log_return", "function": "log_return", "enabled": True},
                 {
                     "name": "ma_2",
-                    "fn": "moving_average",
+                    "function": "moving_average",
                     "window": 2,
                     "enabled": True,
                 },
@@ -59,16 +59,16 @@ def test_validate_config_accepts_minimal_csv_config() -> None:
 def test_validate_config_rejects_unknown_feature_function() -> None:
     """Feature names should fail before the engineer stage indexes the registry."""
     config = _valid_csv_config()
-    config["features"]["params"][0]["fn"] = "not_a_feature"
+    config["features"]["parameters"][0]["function"] = "not_a_feature"
 
-    with pytest.raises(ConfigValidationError, match="features.params\\[0\\].fn"):
+    with pytest.raises(ConfigValidationError, match="features.parameters\\[0\\].function"):
         validate_config(config)
 
 
 def test_validate_config_rejects_duplicate_feature_column_names() -> None:
     """Duplicate output columns would silently overwrite data during engineering."""
     config = _valid_csv_config()
-    config["features"]["params"][1]["name"] = "log_return"
+    config["features"]["parameters"][1]["name"] = "log_return"
 
     with pytest.raises(ConfigValidationError, match="Duplicate feature column"):
         validate_config(config)
@@ -115,9 +115,9 @@ def test_validate_config_accepts_one_sided_csv_date_filter() -> None:
 def test_validate_config_rejects_window_below_one() -> None:
     """Rolling-window feature configs should reject impossible window lengths."""
     config = _valid_csv_config()
-    config["features"]["params"][1]["window"] = 0
+    config["features"]["parameters"][1]["window"] = 0
 
-    with pytest.raises(ConfigValidationError, match="features.params\\[1\\].window"):
+    with pytest.raises(ConfigValidationError, match="features.parameters\\[1\\].window"):
         validate_config(config)
 
 
@@ -128,7 +128,7 @@ def test_validate_config_rejects_clickhouse_without_symbols() -> None:
     config["run"].pop("input_path")
     config["run"]["symbols"] = []
     config["run"]["table"] = "stocks"
-    config["run"]["session"] = "rth"
+    config["run"]["session"] = "regular"
 
     with pytest.raises(ConfigValidationError, match="run.symbols"):
         validate_config(config)

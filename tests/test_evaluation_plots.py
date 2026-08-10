@@ -44,7 +44,7 @@ def frame() -> pd.DataFrame:
             pd.DataFrame(
                 {
                     "symbol": name,
-                    "ts": timestamps,
+                    "timestamp": timestamps,
                     "signal": signal,
                     "flag": (signal > 1.0).astype(float),
                     "fwd_return": 0.01 * signal + 0.02 * rng.standard_normal(200),
@@ -105,7 +105,7 @@ def test_spread_rows_survives_heavily_tied_feature() -> None:
     working = pd.DataFrame(
         {
             "symbol": "AAA",
-            "ts": pd.date_range("2024-01-01", periods=100, freq="D"),
+            "timestamp": pd.date_range("2024-01-01", periods=100, freq="D"),
             "tied_feature": tied,
             "fwd_return": rng.standard_normal(100) * 0.02,
         }

@@ -21,7 +21,7 @@ from feature_engineering.evaluation import (
     time_series_ic,
 )
 from feature_engineering.evaluation.quantiles import target_values_by_quantile
-from feature_engineering.evaluation.regression import default_hac_lags
+from feature_engineering.evaluation.regression import default_kernel_lags
 
 RANDOM_SEED = 7
 
@@ -50,7 +50,7 @@ def _synthetic_frame(
             pd.DataFrame(
                 {
                     "symbol": f"SYM{i}",
-                    "ts": timestamps,
+                    "timestamp": timestamps,
                     "signal": feature,
                     "noise": noise_feature,
                     "fwd_target": target,
@@ -104,7 +104,7 @@ def test_rolling_ic_tracks_a_stable_relationship() -> None:
     # 120 paired rows and a 60-row window leave 61 complete windows.
     assert len(rolled) == 61
     assert (rolled["ic"] > 0.8).all()
-    assert set(rolled.columns) == {"symbol", "ts", "ic"}
+    assert set(rolled.columns) == {"symbol", "timestamp", "ic"}
 
 
 def test_rolling_spearman_reranks_inside_each_window() -> None:
@@ -116,7 +116,7 @@ def test_rolling_spearman_reranks_inside_each_window() -> None:
     frame = pd.DataFrame(
         {
             "symbol": "SYM0",
-            "ts": pd.date_range("2024-01-01", periods=6, freq="D"),
+            "timestamp": pd.date_range("2024-01-01", periods=6, freq="D"),
             "signal": values,
             "fwd_target": values**3,
         }
@@ -134,13 +134,13 @@ def test_rolling_spearman_handles_ties_and_constant_windows() -> None:
     frame = pd.DataFrame(
         {
             "symbol": "SYM0",
-            "ts": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "timestamp": pd.date_range("2024-01-01", periods=8, freq="D"),
             "signal": x,
             "fwd_target": y,
         }
     )
     rolled = rolling_ic(frame, "signal", "fwd_target", window=3)
-    rolled = rolled.set_index("ts")["ic"]
+    rolled = rolled.set_index("timestamp")["ic"]
 
     # Window ending at position 2 covers [5, 5, 5]: constant x, undefined IC.
     assert pd.Timestamp("2024-01-03") not in rolled.index
@@ -161,8 +161,8 @@ def test_quantile_bucketing_excludes_symbols_with_collapsed_buckets() -> None:
         buckets = target_by_feature_quantile(frame, "signal", "fwd_target", quantiles=5)
 
     # Only the clean symbol's 100 rows remain, evenly split into 5 buckets.
-    assert int(buckets["n"].sum()) == 100
-    assert (buckets["n"] == 20).all()
+    assert int(buckets["observations"].sum()) == 100
+    assert (buckets["observations"] == 20).all()
 
 
 def test_ic_summary_reports_mean_icir_and_share_positive() -> None:
@@ -170,13 +170,13 @@ def test_ic_summary_reports_mean_icir_and_share_positive() -> None:
     ic_values = pd.Series([0.1, 0.3, -0.1, 0.2])
     summary = ic_summary(ic_values)
 
-    assert summary["n"] == 4
+    assert summary["observations"] == 4
     assert np.isclose(summary["mean_ic"], 0.125)
     assert np.isclose(summary["share_positive"], 0.75)
-    assert np.isclose(summary["icir"], 0.125 / ic_values.std())
+    assert np.isclose(summary["ic_information_ratio"], 0.125 / ic_values.std())
 
     empty = ic_summary(pd.Series(dtype="float64"))
-    assert empty["n"] == 0 and np.isnan(empty["mean_ic"])
+    assert empty["observations"] == 0 and np.isnan(empty["mean_ic"])
 
 
 def test_newey_west_regression_recovers_known_slope() -> None:
@@ -185,27 +185,28 @@ def test_newey_west_regression_recovers_known_slope() -> None:
     result = newey_west_regression(frame, "signal", "fwd_target")
 
     assert abs(result.beta - 0.5) < 0.05
-    assert result.t_stat > 10
+    assert result.t_statistic > 10
     assert result.p_value < 1e-6
-    assert result.n == 600
+    assert result.observations == 600
 
     noise_result = newey_west_regression(frame, "noise", "fwd_target")
-    assert abs(noise_result.t_stat) < 3
+    assert abs(noise_result.t_statistic) < 3
 
 
 def test_driscoll_kraay_matches_newey_west_for_one_symbol() -> None:
     """With a single symbol the panel-robust SE must reduce to classic Newey-West."""
     sm = pytest.importorskip("statsmodels.api")
     frame = _synthetic_frame(n_symbols=1, n_bars=300)
-    result = newey_west_regression(frame, "signal", "fwd_target", hac_lags=5)
+    result = newey_west_regression(frame, "signal", "fwd_target", kernel_lags=5)
 
     z = (frame["signal"] - frame["signal"].mean()) / frame["signal"].std()
     design = sm.add_constant(z.to_numpy())
     fitted = sm.OLS(frame["fwd_target"].to_numpy(), design).fit(
         cov_type="HAC", cov_kwds={"maxlags": 5, "use_correction": False}
     )
+    # ``fitted.params`` is the statsmodels attribute name, not ours.
     assert np.isclose(result.beta, float(fitted.params[1]), rtol=1e-8)
-    assert np.isclose(result.beta_se, float(fitted.bse[1]), rtol=1e-6)
+    assert np.isclose(result.beta_standard_error, float(fitted.bse[1]), rtol=1e-6)
 
 
 def test_duplicated_symbol_does_not_shrink_the_standard_error() -> None:
@@ -219,23 +220,23 @@ def test_duplicated_symbol_does_not_shrink_the_standard_error() -> None:
     clone = single.assign(symbol="CLONE")
     doubled = pd.concat([single, clone], ignore_index=True)
 
-    single_result = newey_west_regression(single, "signal", "fwd_target", hac_lags=5)
-    doubled_result = newey_west_regression(doubled, "signal", "fwd_target", hac_lags=5)
+    single_result = newey_west_regression(single, "signal", "fwd_target", kernel_lags=5)
+    doubled_result = newey_west_regression(doubled, "signal", "fwd_target", kernel_lags=5)
 
     assert np.isclose(doubled_result.beta, single_result.beta, rtol=1e-8)
-    assert doubled_result.beta_se > 0.95 * single_result.beta_se
+    assert doubled_result.beta_standard_error > 0.95 * single_result.beta_standard_error
 
 
 def test_regression_result_is_invariant_to_row_order() -> None:
     """Interleaving symbols by timestamp must not change the inference."""
     frame = _synthetic_frame(n_symbols=2, n_bars=200)
-    shuffled = frame.sort_values("ts", kind="stable").reset_index(drop=True)
+    shuffled = frame.sort_values("timestamp", kind="stable").reset_index(drop=True)
 
-    by_symbol = newey_west_regression(frame, "signal", "fwd_target", hac_lags=5)
-    by_time = newey_west_regression(shuffled, "signal", "fwd_target", hac_lags=5)
+    by_symbol = newey_west_regression(frame, "signal", "fwd_target", kernel_lags=5)
+    by_time = newey_west_regression(shuffled, "signal", "fwd_target", kernel_lags=5)
 
     assert np.isclose(by_symbol.beta, by_time.beta, rtol=1e-10)
-    assert np.isclose(by_symbol.beta_se, by_time.beta_se, rtol=1e-10)
+    assert np.isclose(by_symbol.beta_standard_error, by_time.beta_standard_error, rtol=1e-10)
 
 
 def test_hac_lags_matter_for_autocorrelated_errors() -> None:
@@ -250,16 +251,16 @@ def test_hac_lags_matter_for_autocorrelated_errors() -> None:
     frame = pd.DataFrame(
         {
             "symbol": "SYM0",
-            "ts": pd.date_range("2024-01-01", periods=n, freq="D"),
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="D"),
             "signal": feature,
             "fwd_target": 0.1 * feature + overlapping_error,
         }
     )
-    short = newey_west_regression(frame, "signal", "fwd_target", hac_lags=1)
-    long = newey_west_regression(frame, "signal", "fwd_target", hac_lags=19)
-    assert long.hac_lags == 19
+    short = newey_west_regression(frame, "signal", "fwd_target", kernel_lags=1)
+    long = newey_west_regression(frame, "signal", "fwd_target", kernel_lags=19)
+    assert long.kernel_lags == 19
     # The exact ratio is data-dependent; the direction is the invariant.
-    assert long.beta_se != short.beta_se
+    assert long.beta_standard_error != short.beta_standard_error
 
 
 def test_evaluation_masks_infinite_values() -> None:
@@ -271,8 +272,8 @@ def test_evaluation_masks_infinite_values() -> None:
     result = newey_west_regression(frame, "signal", "fwd_target")
 
     assert np.isfinite(ic.to_numpy()).all()
-    assert np.isfinite(result.beta) and np.isfinite(result.beta_se)
-    assert result.n == 99
+    assert np.isfinite(result.beta) and np.isfinite(result.beta_standard_error)
+    assert result.observations == 99
 
 
 def test_newey_west_regression_rejects_constant_feature() -> None:
@@ -286,10 +287,10 @@ def test_newey_west_regression_rejects_constant_feature() -> None:
 def test_default_hac_lags_covers_target_overlap() -> None:
     """The lag rule must cover the mechanical overlap of an h-bar target."""
     # Sample-size rule alone: floor(4 * (100/100)^(2/9)) = 4.
-    assert default_hac_lags(100) == 4
+    assert default_kernel_lags(100) == 4
     # A 20-bar target overlaps 19 lags, which must win over the size rule.
-    assert default_hac_lags(100, target_horizon_bars=20) == 19
-    assert default_hac_lags(10) >= 1
+    assert default_kernel_lags(100, target_horizon_bars=20) == 19
+    assert default_kernel_lags(10) >= 1
 
 
 def test_target_by_feature_quantile_is_monotone_for_linear_signal() -> None:
@@ -301,7 +302,7 @@ def test_target_by_feature_quantile_is_monotone_for_linear_signal() -> None:
     means = buckets["mean"].to_numpy()
     assert (np.diff(means) > 0).all()
     # Equal-count buckets over 600 rows: 120 rows each.
-    assert (buckets["n"] == 120).all()
+    assert (buckets["observations"] == 120).all()
 
 
 def test_target_values_by_quantile_partitions_all_rows() -> None:
@@ -320,6 +321,6 @@ def test_evaluate_features_ranks_signal_above_noise() -> None:
 
     assert list(table["feature"]) == ["signal", "noise"]
     signal_row = table.iloc[0]
-    assert signal_row["mean_ts_ic"] > 0.9
-    assert signal_row["t_stat"] > 10
+    assert signal_row["mean_time_series_ic"] > 0.9
+    assert signal_row["t_statistic"] > 10
     assert signal_row["quantile_spread"] > 0

@@ -15,7 +15,7 @@ def _raw_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "symbol": [" MSFT ", "AAPL"],
-            "ts": ["2024-01-02 09:31:00", "2024-01-02 09:30:00"],
+            "timestamp": ["2024-01-02 09:31:00", "2024-01-02 09:30:00"],
             "open": ["201.0", "100.0"],
             "high": ["202.0", "101.0"],
             "low": ["200.0", "99.0"],
@@ -31,7 +31,7 @@ def test_finalize_ohlcv_frame_normalizes_schema_and_sorting() -> None:
 
     assert finalized["symbol"].tolist() == ["AAPL", "MSFT"]
     assert finalized.index.tolist() == [0, 1]
-    assert pd.api.types.is_datetime64_any_dtype(finalized["ts"])
+    assert pd.api.types.is_datetime64_any_dtype(finalized["timestamp"])
     assert pd.api.types.is_float_dtype(finalized["close"])
 
 
@@ -48,7 +48,7 @@ def test_duplicate_symbol_timestamp_bars_are_rejected() -> None:
     """Duplicate bars should not enter feature computation."""
     frame = _raw_frame()
     frame.loc[1, "symbol"] = "MSFT"
-    frame.loc[1, "ts"] = "2024-01-02 09:31:00"
+    frame.loc[1, "timestamp"] = "2024-01-02 09:31:00"
 
     with pytest.raises(
         ValueError,

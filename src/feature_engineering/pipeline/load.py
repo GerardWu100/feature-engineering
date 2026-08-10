@@ -13,7 +13,7 @@ Data contract (assumptions every caller must satisfy)
    split- and dividend-adjusted. This pipeline does not apply corporate-action
    adjustments. Unadjusted prices make a split look like a large return and
    silently corrupt every return, trend, and volatility feature.
-2. Exchange-local timestamps. All loaded ``ts`` values are normalized to naive
+2. Exchange-local timestamps. All loaded ``timestamp`` values are normalized to naive
    exchange-local wall-clock time (``run.exchange_timezone``, default
    US/Eastern). Naive input timestamps are trusted to already be exchange-local;
    timezone-aware inputs are converted. The ClickHouse session filter below
@@ -22,13 +22,13 @@ Data contract (assumptions every caller must satisfy)
    ``reset_by_session`` option in ``engineer.py`` likewise groups by the local
    calendar date.
 3. One row per symbol per bar, with consistent bar size across the run.
-   Duplicate ``(symbol, ts)`` bars are rejected with an error because they
+   Duplicate ``(symbol, timestamp)`` bars are rejected with an error because they
    would double-count rows inside every rolling window.
 
 Known limitation: naive local timestamps cannot distinguish the repeated
 01:00-01:59 hour on the autumn daylight-saving fall-back day. Timezone-aware
 overnight data crossing that hour collapses onto the same wall-clock times and
-is rejected as duplicate bars. The ``rth`` and ``extended`` sessions never
+is rejected as duplicate bars. The ``regular`` and ``extended`` sessions never
 include that hour, so this only affects ``full``-session overnight data.
 """
 
@@ -55,8 +55,8 @@ from feature_engineering.pipeline.constants import (
 
 EXTENDED_SESSION_START_MINUTE = 4 * 60
 EXTENDED_SESSION_END_MINUTE = 19 * 60 + 59
-RTH_SESSION_START_MINUTE = 9 * 60 + 30
-RTH_SESSION_END_MINUTE = 15 * 60 + 59
+REGULAR_SESSION_START_MINUTE = 9 * 60 + 30
+REGULAR_SESSION_END_MINUTE = 15 * 60 + 59
 
 # Inclusive (start, end) minute-of-day bounds per supported trading session, or
 # None for no time-of-day filter. This is the single source of truth for
@@ -69,15 +69,21 @@ SESSION_MINUTE_RANGES: dict[str, tuple[int, int] | None] = {
     # 04:00 through 19:59, useful for pre-market and after-hours studies.
     "extended": (EXTENDED_SESSION_START_MINUTE, EXTENDED_SESSION_END_MINUTE),
     # 09:30 through 15:59 regular trading hours.
-    "rth": (RTH_SESSION_START_MINUTE, RTH_SESSION_END_MINUTE),
+    "regular": (REGULAR_SESSION_START_MINUTE, REGULAR_SESSION_END_MINUTE),
 }
+
+# Name of the timestamp column in the ClickHouse source table. It is aliased to
+# ``timestamp`` on the way out (see the query below), so this abbreviation stays
+# confined to the SQL that talks to the database.
+CLICKHOUSE_TIMESTAMP_COLUMN = "ts"
 
 SESSION_FILTER_SQL: dict[str, str] = {
     session: (
         ""
         if minute_range is None
         else (
-            "AND (toHour(ts) * 60 + toMinute(ts)) "
+            f"AND (toHour({CLICKHOUSE_TIMESTAMP_COLUMN}) * 60 "
+            f"+ toMinute({CLICKHOUSE_TIMESTAMP_COLUMN})) "
             f"BETWEEN {minute_range[0]} AND {minute_range[1]}"
         )
     )
@@ -97,7 +103,7 @@ def load_ohlcv(config: dict[str, Any]) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        Sorted OHLCV data with columns ``symbol``, ``ts``, ``open``, ``high``,
+        Sorted OHLCV data with columns ``symbol``, ``timestamp``, ``open``, ``high``,
         ``low``, ``close``, and ``volume``.
     """
     run_config = config["run"]
@@ -142,14 +148,19 @@ def _load_clickhouse(run_config: dict[str, Any]) -> pd.DataFrame:
 
     # Regular trading hours are the default because most intraday feature
     # experiments should avoid thin pre-market and after-hours bars.
+    # The database column is named ``ts``; it is aliased to ``timestamp`` here so
+    # every frame inside this package uses the spelled-out name. The WHERE and
+    # ORDER BY clauses must keep using ``ts`` because ClickHouse resolves them
+    # against the source column, not the SELECT alias.
     query = f"""
-        SELECT symbol, ts, open, high, low, close, volume
+        SELECT symbol, {CLICKHOUSE_TIMESTAMP_COLUMN} AS timestamp,
+               open, high, low, close, volume
         FROM firstrate.{table}
         WHERE symbol IN %(symbols)s
-          AND toDate(ts) >= toDate(%(start_date)s)
-          AND toDate(ts) <= toDate(%(end_date)s)
+          AND toDate({CLICKHOUSE_TIMESTAMP_COLUMN}) >= toDate(%(start_date)s)
+          AND toDate({CLICKHOUSE_TIMESTAMP_COLUMN}) <= toDate(%(end_date)s)
           {session_filter}
-        ORDER BY symbol, ts
+        ORDER BY symbol, {CLICKHOUSE_TIMESTAMP_COLUMN}
     """
 
     query_parameters = {
@@ -196,7 +207,7 @@ def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFra
         # Timestamps are already naive exchange-local, so calendar-date bounds
         # mean exchange trading dates. Materialize the date column once and
         # reuse it for both bounds.
-        bar_dates = filtered["ts"].dt.date
+        bar_dates = filtered["timestamp"].dt.date
         if "start_date" in run_config:
             start = pd.Timestamp(run_config["start_date"]).date()
             filtered = filtered[bar_dates.loc[filtered.index] >= start]
@@ -205,10 +216,10 @@ def _filter_frame(frame: pd.DataFrame, run_config: dict[str, Any]) -> pd.DataFra
             filtered = filtered[bar_dates.loc[filtered.index] <= end]
 
     # CSV defaults to "full" (no time-of-day filter) because local files are
-    # often daily bars stamped at midnight, which an "rth" default would drop
+    # often daily bars stamped at midnight, which an "regular" default would drop
     # entirely. An explicit run.session is always honored.
     session = run_config.get("session", DEFAULT_CSV_SESSION)
-    filtered = filtered[_session_mask(filtered["ts"], session)]
+    filtered = filtered[_session_mask(filtered["timestamp"], session)]
 
     return filtered.reset_index(drop=True)
 
@@ -221,7 +232,7 @@ def _session_mask(timestamps: pd.Series, session: str) -> pd.Series:
     timestamps
         Naive exchange-local timestamps, one per bar.
     session
-        Key into ``SESSION_MINUTE_RANGES`` (``full``, ``extended``, or ``rth``).
+        Key into ``SESSION_MINUTE_RANGES`` (``full``, ``extended``, or ``regular``).
 
     Returns
     -------
@@ -287,7 +298,7 @@ def _finalize_ohlcv_frame(
     KeyError
         If required OHLCV columns are missing.
     ValueError
-        If symbols are missing or empty, or if duplicate ``(symbol, ts)``
+        If symbols are missing or empty, or if duplicate ``(symbol, timestamp)``
         bars exist after timezone normalization.
     """
     missing_columns = [
@@ -304,8 +315,8 @@ def _finalize_ohlcv_frame(
     if finalized["symbol"].isna().any() or (finalized["symbol"] == "").any():
         raise ValueError("OHLCV symbol values must be present and non-empty")
 
-    finalized["ts"] = _parse_timestamps_as_exchange_local(
-        finalized["ts"], exchange_timezone
+    finalized["timestamp"] = _parse_timestamps_as_exchange_local(
+        finalized["timestamp"], exchange_timezone
     )
 
     for column in NUMERIC_OHLCV_COLUMNS:
@@ -318,7 +329,7 @@ def _finalize_ohlcv_frame(
     # skew every windowed feature, so they are a hard error. Checked after
     # timezone normalization because two differently-labeled input rows can
     # collapse onto the same exchange-local timestamp.
-    if finalized.duplicated(["symbol", "ts"]).any():
+    if finalized.duplicated(["symbol", "timestamp"]).any():
         raise ValueError("Duplicate OHLCV bars found for symbol/timestamp pairs")
 
     return finalized

@@ -35,4 +35,4 @@ Start with `pipeline/cli.py` for execution flow, then read `features/registry.py
 - 2026-04-26: Added the `feature_engineering` namespace package to reduce import-name collisions in installed and notebook workflows.
 - 2026-05-14: Added an explicit config-validation boundary under `pipeline/`.
 - 2026-06-23: Added the `engine/` subpackage so features can be run as a cached batch transform or as O(1) incremental live updates, alongside the file-writing CLI pipeline.
-- 2026-08-10: Added the `evaluation/` subpackage (IC, Newey-West regression, quantile analysis, plots) and the `next_n_bar_realized_vol` volatility target.
+- 2026-08-10: Added the `evaluation/` subpackage (IC, Newey-West regression, quantile analysis, plots) and the `next_n_bar_realized_volatility` volatility target.

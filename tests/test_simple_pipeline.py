@@ -28,7 +28,7 @@ def _raw_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "symbol": ["AAPL", "AAPL", "MSFT", "MSFT"],
-            "ts": timestamps,
+            "timestamp": timestamps,
             "open": [100.0, 101.0, 200.0, 201.0],
             "high": [101.0, 102.0, 199.0, 202.0],
             "low": [99.0, 100.0, 201.0, 200.0],
@@ -55,7 +55,7 @@ def test_load_ohlcv_reads_local_csv_and_filters_symbols(tmp_path: Path) -> None:
     loaded = load_ohlcv(config)
 
     assert loaded["symbol"].tolist() == ["AAPL", "AAPL"]
-    assert pd.api.types.is_datetime64_any_dtype(loaded["ts"])
+    assert pd.api.types.is_datetime64_any_dtype(loaded["timestamp"])
 
 
 def test_clickhouse_loader_rejects_unsafe_table_identifier_before_querying() -> None:
@@ -102,13 +102,13 @@ def test_compute_features_respects_category_filters() -> None:
         "features": {
             "include_categories": ["returns", "trend"],
             "exclude_categories": ["target"],
-            "params": [
-                {"name": "log_return", "fn": "log_return", "enabled": True},
-                {"name": "ma_2", "fn": "moving_average", "window": 2, "enabled": True},
-                {"name": "range", "fn": "bar_range_pct", "enabled": True},
+            "parameters": [
+                {"name": "log_return", "function": "log_return", "enabled": True},
+                {"name": "ma_2", "function": "moving_average", "window": 2, "enabled": True},
+                {"name": "range", "function": "bar_range_percent", "enabled": True},
                 {
                     "name": "next_day",
-                    "fn": "next_n_bar_return",
+                    "function": "next_n_bar_return",
                     "bars": 1,
                     "enabled": True,
                 },
@@ -129,7 +129,7 @@ def test_compute_features_keeps_symbol_histories_separate() -> None:
     frame = pd.DataFrame(
         {
             "symbol": ["AAPL", "AAPL", "MSFT", "MSFT"],
-            "ts": pd.to_datetime(
+            "timestamp": pd.to_datetime(
                 [
                     "2024-01-02 09:30:00",
                     "2024-01-02 09:31:00",
@@ -146,8 +146,8 @@ def test_compute_features_keeps_symbol_histories_separate() -> None:
     )
     config = {
         "features": {
-            "params": [
-                {"name": "ma_2", "fn": "moving_average", "window": 2},
+            "parameters": [
+                {"name": "ma_2", "function": "moving_average", "window": 2},
             ],
         }
     }
@@ -167,7 +167,7 @@ def test_compute_features_reset_by_session_does_not_cross_day_boundary() -> None
     frame = pd.DataFrame(
         {
             "symbol": ["AAPL", "AAPL", "AAPL", "AAPL"],
-            "ts": pd.to_datetime(
+            "timestamp": pd.to_datetime(
                 [
                     "2024-01-02 09:30:00",
                     "2024-01-02 09:31:00",
@@ -182,12 +182,12 @@ def test_compute_features_reset_by_session_does_not_cross_day_boundary() -> None
             "volume": [1000.0, 1200.0, 1500.0, 1800.0],
         }
     )
-    base_params = [{"name": "ma_2", "fn": "moving_average", "window": 2}]
+    base_params = [{"name": "ma_2", "function": "moving_average", "window": 2}]
 
-    crossing = compute_features(frame, {"features": {"params": base_params}})
+    crossing = compute_features(frame, {"features": {"parameters": base_params}})
     reset = compute_features(
         frame,
-        {"features": {"reset_by_session": True, "params": base_params}},
+        {"features": {"reset_by_session": True, "parameters": base_params}},
     )
 
     # Index 2 is the first bar of day two. Without a reset the window pulls in
@@ -204,7 +204,7 @@ def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
     featured = pd.DataFrame(
         {
             "symbol": ["AAPL"],
-            "ts": pd.to_datetime(["2024-01-02 09:30:00"]),
+            "timestamp": pd.to_datetime(["2024-01-02 09:30:00"]),
             "log_return": [0.01],
         }
     )
@@ -215,8 +215,8 @@ def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
             "version": "test",
         },
         "features": {
-            "params": [
-                {"name": "log_return", "fn": "log_return", "enabled": True},
+            "parameters": [
+                {"name": "log_return", "function": "log_return", "enabled": True},
             ]
         },
     }

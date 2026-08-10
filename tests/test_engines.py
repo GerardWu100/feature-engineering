@@ -14,39 +14,39 @@ from feature_engineering.engine import FeatureEngine, OnlineFeatureEngine
 from feature_engineering.pipeline.engineer import compute_features
 
 # Every non-target feature with small windows so warmup finishes inside the
-# sample. These params are shared by the batch and online paths under test.
+# sample. These parameters are shared by the batch and online paths under test.
 ALL_ONLINE_FEATURES = {
     "features": {
-        "params": [
-            {"name": "log_return", "fn": "log_return"},
-            {"name": "simple_return", "fn": "simple_return"},
-            {"name": "volume_change", "fn": "volume_change"},
-            {"name": "bar_range_pct", "fn": "bar_range_pct"},
-            {"name": "dollar_volume", "fn": "dollar_volume"},
-            {"name": "ma_5", "fn": "moving_average", "window": 5},
-            {"name": "price_vs_sma_10", "fn": "price_vs_sma", "window": 10},
-            {"name": "roc_4", "fn": "rate_of_change", "periods": 4},
-            {"name": "rolling_std_6", "fn": "rolling_std", "window": 6},
-            {"name": "volume_ratio_5", "fn": "volume_ratio", "window": 5},
-            {"name": "rsi_14", "fn": "relative_strength_index", "window": 14},
-            {"name": "atr_10", "fn": "average_true_range", "window": 10},
-            {"name": "macd", "fn": "macd_line", "fast": 4, "slow": 8},
+        "parameters": [
+            {"name": "log_return", "function": "log_return"},
+            {"name": "simple_return", "function": "simple_return"},
+            {"name": "volume_change", "function": "volume_change"},
+            {"name": "bar_range_percent", "function": "bar_range_percent"},
+            {"name": "dollar_volume", "function": "dollar_volume"},
+            {"name": "ma_5", "function": "moving_average", "window": 5},
+            {"name": "price_vs_sma_10", "function": "price_vs_moving_average", "window": 10},
+            {"name": "roc_4", "function": "rate_of_change", "periods": 4},
+            {"name": "rolling_std_6", "function": "rolling_standard_deviation", "window": 6},
+            {"name": "volume_ratio_5", "function": "volume_ratio", "window": 5},
+            {"name": "rsi_14", "function": "relative_strength_index", "window": 14},
+            {"name": "atr_10", "function": "average_true_range", "window": 10},
+            {"name": "macd", "function": "macd_line", "fast": 4, "slow": 8},
             {
                 "name": "macd_sig",
-                "fn": "macd_signal",
+                "function": "macd_signal",
                 "fast": 4,
                 "slow": 8,
                 "signal": 3,
             },
             {
                 "name": "macd_hist",
-                "fn": "macd_histogram",
+                "function": "macd_histogram",
                 "fast": 4,
                 "slow": 8,
                 "signal": 3,
             },
-            {"name": "vwap", "fn": "vwap"},
-            {"name": "price_vs_vwap", "fn": "price_vs_vwap"},
+            {"name": "vwap", "function": "vwap"},
+            {"name": "price_vs_vwap", "function": "price_vs_vwap"},
         ]
     }
 }
@@ -67,7 +67,7 @@ def _make_symbol_frame(
     return pd.DataFrame(
         {
             "symbol": symbol,
-            "ts": timestamps,
+            "timestamp": timestamps,
             "open": open_,
             "high": high,
             "low": low,
@@ -91,10 +91,10 @@ def test_online_engine_matches_batch_for_every_feature() -> None:
     batch = compute_features(frame, ALL_ONLINE_FEATURES)
     online = OnlineFeatureEngine(ALL_ONLINE_FEATURES).stream_frame(frame)
 
-    # Both paths return rows in (symbol, ts) order, so columns line up directly.
+    # Both paths return rows in (symbol, timestamp) order, so columns line up directly.
     assert list(online.columns) == list(batch.columns)
     for column in batch.columns:
-        if column in ("symbol", "ts"):
+        if column in ("symbol", "timestamp"):
             assert online[column].tolist() == batch[column].tolist()
             continue
         np.testing.assert_allclose(
@@ -124,14 +124,14 @@ def test_feature_engine_resolves_and_caches_feature_names() -> None:
     assert "vwap" in engine.feature_names
 
     with pytest.raises(KeyError):
-        FeatureEngine({"features": {"params": [{"name": "x", "fn": "does_not_exist"}]}})
+        FeatureEngine({"features": {"parameters": [{"name": "x", "function": "does_not_exist"}]}})
 
 
 def test_online_engine_rejects_forward_looking_targets() -> None:
     """A target feature has no honest online value and must be refused up front."""
     config = {
         "features": {
-            "params": [{"name": "y", "fn": "next_n_bar_return", "bars": 1}],
+            "parameters": [{"name": "y", "function": "next_n_bar_return", "bars": 1}],
         }
     }
     with pytest.raises(ValueError, match="forward-looking target"):
@@ -143,9 +143,9 @@ def test_rsi_stays_within_bounds_and_atr_is_positive() -> None:
     frame = _make_symbol_frame("AAPL", n_bars=80, start_price=100.0, seed=3)
     config = {
         "features": {
-            "params": [
-                {"name": "rsi", "fn": "relative_strength_index", "window": 14},
-                {"name": "atr", "fn": "average_true_range", "window": 14},
+            "parameters": [
+                {"name": "rsi", "function": "relative_strength_index", "window": 14},
+                {"name": "atr", "function": "average_true_range", "window": 14},
             ]
         }
     }
@@ -163,12 +163,12 @@ def test_macd_histogram_equals_line_minus_signal() -> None:
     frame = _make_symbol_frame("AAPL", n_bars=80, start_price=100.0, seed=4)
     config = {
         "features": {
-            "params": [
-                {"name": "line", "fn": "macd_line", "fast": 4, "slow": 8},
-                {"name": "sig", "fn": "macd_signal", "fast": 4, "slow": 8, "signal": 3},
+            "parameters": [
+                {"name": "line", "function": "macd_line", "fast": 4, "slow": 8},
+                {"name": "sig", "function": "macd_signal", "fast": 4, "slow": 8, "signal": 3},
                 {
                     "name": "hist",
-                    "fn": "macd_histogram",
+                    "function": "macd_histogram",
                     "fast": 4,
                     "slow": 8,
                     "signal": 3,
@@ -189,15 +189,15 @@ def test_session_reset_resets_vwap_and_matches_online() -> None:
     day_one = _make_symbol_frame("AAPL", n_bars=10, start_price=100.0, seed=5)
     day_two = _make_symbol_frame("AAPL", n_bars=10, start_price=120.0, seed=6)
     # Shift day two onto the next calendar date but keep the same clock times.
-    day_two = day_two.assign(ts=day_two["ts"] + pd.Timedelta(days=1))
+    day_two = day_two.assign(timestamp=day_two["timestamp"] + pd.Timedelta(days=1))
     frame = pd.concat([day_one, day_two], ignore_index=True)
 
     config = {
         "features": {
             "reset_by_session": True,
-            "params": [
-                {"name": "vwap", "fn": "vwap"},
-                {"name": "ma_3", "fn": "moving_average", "window": 3},
+            "parameters": [
+                {"name": "vwap", "function": "vwap"},
+                {"name": "ma_3", "function": "moving_average", "window": 3},
             ],
         }
     }

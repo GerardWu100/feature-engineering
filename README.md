@@ -16,11 +16,13 @@ load data -> clean invalid rows -> compute categorized features -> export files
 - Cleans impossible market-data rows.
 - Computes features by category:
   - `returns`: price change features (log and simple returns).
-  - `trend`: direction and momentum (moving average, price vs SMA, rate of change, RSI, MACD line/signal/histogram).
-  - `volatility`: price movement size and instability (rolling return std, bar range, ATR).
+  - `trend`: direction and momentum (moving average, price vs moving average,
+    rate of change, relative strength index, MACD line/signal/histogram).
+  - `volatility`: price movement size and instability (rolling standard
+    deviation of returns, bar range percent, average true range).
   - `volume`: trading activity (relative volume, dollar volume, volume change, VWAP, price vs VWAP).
   - `target`: forward-looking labels for supervised learning
-    (`next_n_bar_return` for direction, `next_n_bar_realized_vol` for
+    (`next_n_bar_return` for direction, `next_n_bar_realized_volatility` for
     volatility: the standard deviation of the next N one-bar log returns).
 - Exports feature data to Parquet and/or CSV.
 - Writes a small `feature_catalog.csv` with feature names, categories, formulas, and descriptions.
@@ -70,7 +72,7 @@ input_path = "data/raw/prices.csv"
 The CSV must include:
 
 ```text
-symbol,ts,open,high,low,close,volume
+symbol,timestamp,open,high,low,close,volume
 ```
 
 ## Project Layout
@@ -110,7 +112,7 @@ feature-engineering/
 
 1. Put the function in the matching category file under `src/feature_engineering/features/`.
 2. Decorate it with `@register(...)`.
-3. Add a `[[features.params]]` entry in `config.toml`.
+3. Add a `[[features.parameters]]` entry in `config.toml`.
 4. For live use, add an O(1) accumulator in `engine/online.py` and register it in
    `ONLINE_FEATURE_FACTORIES`. The equivalence test then checks it against the
    batch version.
@@ -118,9 +120,9 @@ feature-engineering/
 Example:
 
 ```toml
-[[features.params]]
-name = "ma_20"
-fn = "moving_average"
+[[features.parameters]]
+name = "moving_average_20"
+function = "moving_average"
 window = 20
 enabled = true
 ```
@@ -150,7 +152,7 @@ reset_by_session = true
 ```
 
 Leave it `false` (the default) for daily bars, where one row already is one day.
-This relies on `ts` being in the exchange's local time (see Data Contract below).
+This relies on `timestamp` being in the exchange's local time (see Data Contract below).
 
 ## Data Contract
 
@@ -158,16 +160,16 @@ The loader assumes:
 
 - Prices are split- and dividend-adjusted. The pipeline does not adjust for
   corporate actions, so unadjusted prices would turn a split into a fake return.
-- Naive `ts` values are in the exchange's local wall-clock time (US equities:
-  US/Eastern). Timezone-aware `ts` values (for example UTC exports) are
+- Naive `timestamp` values are in the exchange's local wall-clock time (US equities:
+  US/Eastern). Timezone-aware `timestamp` values (for example UTC exports) are
   converted to `run.exchange_timezone` and stored naive, so the session filter
   and the intraday reset always see exchange-local time.
-- One row per symbol per bar. Duplicate `(symbol, ts)` bars fail the load
+- One row per symbol per bar. Duplicate `(symbol, timestamp)` bars fail the load
   loudly because they would double-count rows inside every rolling window.
 
-The `run.session` filter (`rth`, `extended`, `full`) applies to both data
+The `run.session` filter (`regular`, `extended`, `full`) applies to both data
 sources. CSV runs default to `full` because daily files are stamped at
-midnight; ClickHouse runs default to `rth`.
+midnight; ClickHouse runs default to `regular`.
 
 ## Use As A Module
 
@@ -195,7 +197,7 @@ features = engine.transform(cleaned)
 
 # Live trading: O(1) per bar. Feed one bar (dict or Series) at a time.
 live = OnlineFeatureEngine(config_dict)  # rejects forward-looking targets
-for bar in stream:  # bar has symbol, ts, OHLCV keys
+for bar in stream:  # bar has symbol, timestamp, OHLCV keys
     values = live.update(bar)  # -> {feature_name: value}
 ```
 
@@ -214,16 +216,16 @@ from feature_engineering import evaluate_features
 
 table = evaluate_features(
     features,                       # the frame compute_features returned
-    "next_20bar_realized_vol",      # target column to test against
+    "next_20bar_realized_volatility",      # target column to test against
     target_horizon_bars=20,         # horizon, so inference covers the overlap
 )
 ```
 
 The table has one row per feature, ranked by absolute t-statistic:
 
-- `mean_ts_ic`: time-series Spearman information coefficient (rank correlation
+- `mean_time_series_ic`: time-series Spearman information coefficient (rank correlation
   of feature now vs target later), averaged across symbols. Descriptive.
-- `beta`, `t_stat`, `p_value`: regression of the target on the per-symbol
+- `beta`, `t_statistic`, `p_value`: regression of the target on the per-symbol
   z-scored feature with Driscoll-Kraay standard errors (a Newey-West kernel
   applied to per-timestamp sums), which correct both for the serial
   correlation that overlapping forward windows create and for symbols moving
@@ -244,8 +246,8 @@ from feature_engineering.evaluation import (
     violin_by_quantile, spread_rows_by_state, rolling_ic_panels,
 )
 
-violin_by_quantile(features, "rolling_std_20", "next_20bar_realized_vol")
-spread_rows_by_state(features, ["rsi_14", "rolling_std_20"], "next_1bar_return")
+violin_by_quantile(features, "rolling_standard_deviation_20", "next_20bar_realized_volatility")
+spread_rows_by_state(features, ["rsi_14", "rolling_standard_deviation_20"], "next_1bar_return")
 rolling_ic_panels(features, ["rsi_14"], "next_1bar_return", window=252)
 ```
 
@@ -266,7 +268,7 @@ The pipeline validates `config.toml` before loading data. Important checks inclu
 - `run.source` is `csv` or `clickhouse`.
 - `run.output_formats` contains only `csv` and/or `parquet`.
 - ClickHouse runs include non-empty `symbols`, `start_date`, and `end_date`.
-- Feature `fn` values exist in the registry.
+- Feature `function` values exist in the registry.
 - Enabled feature `name` values are unique output columns.
 - Category filters use real categories and do not both include and exclude the same category.
 - Positive integer parameters such as `window`, `periods`, and `bars` are at least 1.

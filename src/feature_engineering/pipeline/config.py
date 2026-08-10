@@ -88,7 +88,7 @@ def _validate_run_config(run_config: dict[str, Any]) -> None:
 def _validate_session(run_config: dict[str, Any]) -> None:
     """Validate the optional session filter shared by both data sources."""
     if "session" not in run_config:
-        # Loading applies a per-source default (rth for ClickHouse, full for
+        # Loading applies a per-source default (regular for ClickHouse, full for
         # CSV), both of which are valid, so an absent key needs no check.
         return
 
@@ -244,7 +244,7 @@ def _validate_features_config(features_config: Any) -> None:
     ):
         raise ConfigValidationError("features.reset_by_session must be true or false.")
 
-    _validate_feature_items(features_config.get("params", []))
+    _validate_feature_items(features_config.get("parameters", []))
 
 
 def _validate_category_list(raw_categories: Any, *, label: str) -> set[str]:
@@ -285,12 +285,12 @@ def _validate_category_overlap(
 def _validate_feature_items(raw_feature_items: Any) -> None:
     """Validate configured feature columns before engineering starts."""
     if not isinstance(raw_feature_items, list):
-        raise ConfigValidationError("features.params must be a list.")
+        raise ConfigValidationError("features.parameters must be a list.")
 
     active_feature_names: set[str] = set()
     for index, feature_item in enumerate(raw_feature_items):
         if not isinstance(feature_item, dict):
-            raise ConfigValidationError(f"features.params[{index}] must be a table.")
+            raise ConfigValidationError(f"features.parameters[{index}] must be a table.")
 
         _validate_feature_item(feature_item, index)
 
@@ -310,15 +310,15 @@ def _validate_feature_items(raw_feature_items: Any) -> None:
 
 
 def _validate_feature_item(feature_item: dict[str, Any], index: int) -> None:
-    """Validate one ``[[features.params]]`` table."""
-    label = f"features.params[{index}]"
-    _require_keys(feature_item, {"fn", "name"}, section_name=label)
+    """Validate one ``[[features.parameters]]`` table."""
+    label = f"features.parameters[{index}]"
+    _require_keys(feature_item, {"function", "name"}, section_name=label)
     _validate_non_empty_string(feature_item["name"], f"{label}.name")
-    _validate_non_empty_string(feature_item["fn"], f"{label}.fn")
+    _validate_non_empty_string(feature_item["function"], f"{label}.function")
 
-    function_name = feature_item["fn"]
+    function_name = feature_item["function"]
     if function_name not in REGISTRY:
-        raise ConfigValidationError(f"{label}.fn is unknown: {function_name}.")
+        raise ConfigValidationError(f"{label}.function is unknown: {function_name}.")
 
     if "enabled" in feature_item and not isinstance(feature_item["enabled"], bool):
         raise ConfigValidationError(f"{label}.enabled must be true or false.")

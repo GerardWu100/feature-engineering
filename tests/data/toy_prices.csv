@@ -1,4 +1,4 @@
-symbol,ts,open,high,low,close,volume
+symbol,timestamp,open,high,low,close,volume
 AAPL,2024-01-02 09:30:00-05:00,100,101,99,100,1000
 AAPL,2024-01-02 09:31:00-05:00,101,102,100,101,1200
 AAPL,2024-01-02 09:32:00-05:00,102,104,101,103,1800

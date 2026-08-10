@@ -22,7 +22,7 @@ def _frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "symbol": ["AAPL", "AAPL"],
-            "ts": pd.to_datetime(["2024-01-02 09:30:00", "2024-01-02 09:31:00"]),
+            "timestamp": pd.to_datetime(["2024-01-02 09:30:00", "2024-01-02 09:31:00"]),
             "open": [100.0, 101.0],
             "high": [101.0, 102.0],
             "low": [99.0, 100.0],
@@ -36,7 +36,7 @@ def _config(feature_name: str, function_name: str) -> dict[str, Any]:
     """Return a minimal config dict enabling exactly one feature."""
     return {
         "features": {
-            "params": [{"name": feature_name, "fn": function_name, "enabled": True}]
+            "parameters": [{"name": feature_name, "function": function_name, "enabled": True}]
         }
     }
 
@@ -48,14 +48,14 @@ def _register_contract_feature(
 ) -> None:
     """Register a temporary feature returning fixed values, test-scoped."""
 
-    def contract_feature(frame: pd.DataFrame, params: dict[str, Any]) -> object:
+    def contract_feature(frame: pd.DataFrame, parameters: dict[str, Any]) -> object:
         return values
 
     monkeypatch.setitem(
         REGISTRY,
         function_name,
         FeatureSpec(
-            fn=contract_feature,
+            function=contract_feature,
             category="returns",
             lookback=0,
             description="Temporary contract test feature.",

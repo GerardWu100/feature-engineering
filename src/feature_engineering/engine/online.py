@@ -20,7 +20,7 @@ Targets (the ``target`` category, e.g. ``next_n_bar_return``) are forward
 looking and cannot be produced online; ``OnlineFeatureEngine`` rejects them.
 
 A "bar" is any mapping (a dict or a pandas ``Series``) with the keys ``symbol``,
-``ts``, ``open``, ``high``, ``low``, ``close``, and ``volume``.
+``timestamp``, ``open``, ``high``, ``low``, ``close``, and ``volume``.
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ from feature_engineering.features.trend import (
     DEFAULT_MACD_FAST,
     DEFAULT_MACD_SIGNAL,
     DEFAULT_MACD_SLOW,
-    DEFAULT_ROC_PERIODS,
+    DEFAULT_RATE_OF_CHANGE_PERIODS,
     DEFAULT_RSI_WINDOW,
-    DEFAULT_SMA_WINDOW,
+    DEFAULT_MOVING_AVERAGE_WINDOW,
 )
 from feature_engineering.features.volatility import DEFAULT_ATR_WINDOW
 from feature_engineering.pipeline.constants import sort_by_symbol_and_time
@@ -226,7 +226,7 @@ class _RollingStd:
     """Sample std (ddof=1) of log returns over the window's ``window - 1`` returns.
 
     Maintains running sum and sum of squares of the buffered log returns so each
-    update is O(1). Matches ``volatility.rolling_std``: a window of N prices uses
+    update is O(1). Matches ``volatility.rolling_standard_deviation``: a window of N prices uses
     the N-1 adjacent returns.
     """
 
@@ -403,44 +403,44 @@ class _PriceVsVwap:
 
 
 # Map each registry feature function name to a factory that builds its online
-# accumulator from the feature's params. Targets are intentionally absent.
+# accumulator from the feature's parameters. Targets are intentionally absent.
 ONLINE_FEATURE_FACTORIES: dict[str, Callable[[dict[str, Any]], OnlineFeature]] = {
-    "log_return": lambda params: _LogReturn(),
-    "simple_return": lambda params: _SimpleReturn(),
-    "volume_change": lambda params: _VolumeChange(),
-    "bar_range_pct": lambda params: _BarRangePct(),
-    "dollar_volume": lambda params: _DollarVolume(),
-    "moving_average": lambda params: _MovingAverage(int(params["window"])),
-    "price_vs_sma": lambda params: _PriceVsSma(
-        int(params.get("window", DEFAULT_SMA_WINDOW))
+    "log_return": lambda parameters: _LogReturn(),
+    "simple_return": lambda parameters: _SimpleReturn(),
+    "volume_change": lambda parameters: _VolumeChange(),
+    "bar_range_percent": lambda parameters: _BarRangePct(),
+    "dollar_volume": lambda parameters: _DollarVolume(),
+    "moving_average": lambda parameters: _MovingAverage(int(parameters["window"])),
+    "price_vs_moving_average": lambda parameters: _PriceVsSma(
+        int(parameters.get("window", DEFAULT_MOVING_AVERAGE_WINDOW))
     ),
-    "rate_of_change": lambda params: _RateOfChange(
-        int(params.get("periods", DEFAULT_ROC_PERIODS))
+    "rate_of_change": lambda parameters: _RateOfChange(
+        int(parameters.get("periods", DEFAULT_RATE_OF_CHANGE_PERIODS))
     ),
-    "rolling_std": lambda params: _RollingStd(int(params["window"])),
-    "volume_ratio": lambda params: _VolumeRatio(int(params["window"])),
-    "relative_strength_index": lambda params: _Rsi(
-        int(params.get("window", DEFAULT_RSI_WINDOW))
+    "rolling_standard_deviation": lambda parameters: _RollingStd(int(parameters["window"])),
+    "volume_ratio": lambda parameters: _VolumeRatio(int(parameters["window"])),
+    "relative_strength_index": lambda parameters: _Rsi(
+        int(parameters.get("window", DEFAULT_RSI_WINDOW))
     ),
-    "average_true_range": lambda params: _Atr(
-        int(params.get("window", DEFAULT_ATR_WINDOW))
+    "average_true_range": lambda parameters: _Atr(
+        int(parameters.get("window", DEFAULT_ATR_WINDOW))
     ),
-    "macd_line": lambda params: _MacdLine(
-        int(params.get("fast", DEFAULT_MACD_FAST)),
-        int(params.get("slow", DEFAULT_MACD_SLOW)),
+    "macd_line": lambda parameters: _MacdLine(
+        int(parameters.get("fast", DEFAULT_MACD_FAST)),
+        int(parameters.get("slow", DEFAULT_MACD_SLOW)),
     ),
-    "macd_signal": lambda params: _MacdSignal(
-        int(params.get("fast", DEFAULT_MACD_FAST)),
-        int(params.get("slow", DEFAULT_MACD_SLOW)),
-        int(params.get("signal", DEFAULT_MACD_SIGNAL)),
+    "macd_signal": lambda parameters: _MacdSignal(
+        int(parameters.get("fast", DEFAULT_MACD_FAST)),
+        int(parameters.get("slow", DEFAULT_MACD_SLOW)),
+        int(parameters.get("signal", DEFAULT_MACD_SIGNAL)),
     ),
-    "macd_histogram": lambda params: _MacdHistogram(
-        int(params.get("fast", DEFAULT_MACD_FAST)),
-        int(params.get("slow", DEFAULT_MACD_SLOW)),
-        int(params.get("signal", DEFAULT_MACD_SIGNAL)),
+    "macd_histogram": lambda parameters: _MacdHistogram(
+        int(parameters.get("fast", DEFAULT_MACD_FAST)),
+        int(parameters.get("slow", DEFAULT_MACD_SLOW)),
+        int(parameters.get("signal", DEFAULT_MACD_SIGNAL)),
     ),
-    "vwap": lambda params: _Vwap(),
-    "price_vs_vwap": lambda params: _PriceVsVwap(),
+    "vwap": lambda parameters: _Vwap(),
+    "price_vs_vwap": lambda parameters: _PriceVsVwap(),
 }
 
 
@@ -472,14 +472,14 @@ class OnlineFeatureEngine:
         features_config = config.get("features", {})
         self._reset_by_session = bool(features_config.get("reset_by_session", False))
 
-        # Blueprint: (column_name, factory, params). Built once; used to spin up
+        # Blueprint: (column_name, factory, parameters). Built once; used to spin up
         # fresh accumulators per symbol (and per session when resetting).
         self._blueprints: list[
             tuple[str, Callable[[dict[str, Any]], OnlineFeature], dict[str, Any]]
         ] = []
         for feature_item in selected_feature_configs(config):
-            column_name, spec, params = resolve_feature(feature_item)
-            function_name = feature_item["fn"]
+            column_name, spec, parameters = resolve_feature(feature_item)
+            function_name = feature_item["function"]
             if spec.category == "target":
                 raise ValueError(
                     f"Feature {column_name!r} is a forward-looking target and "
@@ -487,13 +487,13 @@ class OnlineFeatureEngine:
                 )
             if function_name not in ONLINE_FEATURE_FACTORIES:
                 raise ValueError(
-                    f"Feature fn {function_name!r} has no online implementation."
+                    f"Feature function {function_name!r} has no online implementation."
                 )
             self._blueprints.append(
-                (column_name, ONLINE_FEATURE_FACTORIES[function_name], params)
+                (column_name, ONLINE_FEATURE_FACTORIES[function_name], parameters)
             )
 
-        # Per-symbol state: {symbol: {"accumulators": {col: acc}, "date": date}}.
+        # Per-symbol state: {symbol: {"accumulators": {column: accumulator}, "date": date}}.
         self._state: dict[str, dict[str, Any]] = {}
 
     @property
@@ -511,7 +511,7 @@ class OnlineFeatureEngine:
         Parameters
         ----------
         bar
-            Mapping with ``symbol``, ``ts`` (when ``reset_by_session``), and
+            Mapping with ``symbol``, ``timestamp`` (when ``reset_by_session``), and
             ``open``/``high``/``low``/``close``/``volume``.
 
         Returns
@@ -528,8 +528,8 @@ class OnlineFeatureEngine:
         if state is None or (self._reset_by_session and state["date"] != session_date):
             state = {
                 "accumulators": {
-                    column_name: factory(params)
-                    for column_name, factory, params in self._blueprints
+                    column_name: factory(parameters)
+                    for column_name, factory, parameters in self._blueprints
                 },
                 "date": session_date,
             }
@@ -544,28 +544,28 @@ class OnlineFeatureEngine:
         """Replay a historical frame bar by bar through the online engine.
 
         This is a convenience for backtests, demos, and the batch-equivalence
-        tests. It sorts by ``symbol`` then ``ts`` (so each symbol's bars arrive
+        tests. It sorts by ``symbol`` then ``timestamp`` (so each symbol's bars arrive
         in time order) and returns a feature frame in the same row order as
         ``compute_features``.
 
         Parameters
         ----------
         frame
-            OHLCV frame with ``symbol``, ``ts``, and OHLCV columns.
+            OHLCV frame with ``symbol``, ``timestamp``, and OHLCV columns.
 
         Returns
         -------
         pandas.DataFrame
-            ``symbol``, ``ts``, and one column per configured feature.
+            ``symbol``, ``timestamp``, and one column per configured feature.
         """
         self.reset()
         sorted_frame = sort_by_symbol_and_time(frame)
         rows: list[dict[str, Any]] = []
         for bar in sorted_frame.to_dict("records"):
             feature_values = self.update(bar)
-            rows.append({"symbol": bar["symbol"], "ts": bar["ts"], **feature_values})
-        return pd.DataFrame(rows, columns=["symbol", "ts", *self.feature_names])
+            rows.append({"symbol": bar["symbol"], "timestamp": bar["timestamp"], **feature_values})
+        return pd.DataFrame(rows, columns=["symbol", "timestamp", *self.feature_names])
 
     def _session_date(self, bar: Mapping[str, Any]) -> Any:
         """Return the calendar date used as the session-reset key for a bar."""
-        return pd.Timestamp(bar["ts"]).normalize()
+        return pd.Timestamp(bar["timestamp"]).normalize()

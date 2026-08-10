@@ -34,7 +34,7 @@ class FeatureEngine:
     config
         Config dict with a ``features`` section, the same shape ``config.toml``
         parses into. The ``run`` section is not required: this engine only reads
-        ``features.params``, ``features.include_categories``,
+        ``features.parameters``, ``features.include_categories``,
         ``features.exclude_categories``, and ``features.reset_by_session``.
 
     Attributes
@@ -44,7 +44,7 @@ class FeatureEngine:
 
     Notes
     -----
-    Feature specs are resolved in ``__init__``. An unknown ``fn`` raises
+    Feature specs are resolved in ``__init__``. An unknown ``function`` raises
     immediately, so a misconfigured engine fails at construction rather than on
     the first transform.
     """
@@ -70,13 +70,13 @@ class FeatureEngine:
         Parameters
         ----------
         frame
-            Clean OHLCV data with ``symbol``, ``ts``, and OHLCV columns. It does
+            Clean OHLCV data with ``symbol``, ``timestamp``, and OHLCV columns. It does
             not need to be pre-sorted; the engine sorts internally.
 
         Returns
         -------
         pandas.DataFrame
-            Identifier columns (``symbol``, ``ts``) plus one column per
+            Identifier columns (``symbol``, ``timestamp``) plus one column per
             configured feature, identical to ``compute_features`` output.
         """
         sorted_frame = sort_by_symbol_and_time(frame)

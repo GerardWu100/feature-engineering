@@ -20,7 +20,7 @@ table. ``plots.py`` draws the same evidence: distribution (violin), quantile
 means, spread rows, and rolling IC stability.
 
 All functions take the long feature frame the pipeline produces: one row per
-(symbol, ts) with feature and target columns. They never mutate the caller's
+(symbol, timestamp) with feature and target columns. They never mutate the caller's
 frame.
 """
 

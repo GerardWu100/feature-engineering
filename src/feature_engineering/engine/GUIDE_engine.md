@@ -8,7 +8,7 @@ patterns. Neither contains feature math; both delegate to the formulas in
 
 | Engine | File | Use case | Cost per update |
 |---|---|---|---|
-| `FeatureEngine` | `batch.py` | Research / backtest. Validate and resolve the feature list once, then `transform(df) -> df` many times. | Full vectorized recompute over the frame. |
+| `FeatureEngine` | `batch.py` | Research / backtest. Validate and resolve the feature list once, then `transform(frame) -> frame` many times. | Full vectorized recompute over the frame. |
 | `OnlineFeatureEngine` | `online.py` | Live trading. Feed one bar at a time with `update(bar) -> {feature: value}`. | O(1) (bounded) per bar, independent of session length. |
 
 The key invariant connecting them: **the batch feature functions are the single

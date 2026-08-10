@@ -2,7 +2,7 @@
 
 The information coefficient is the correlation between a feature observed now
 and a target realized later. Because the pipeline's targets are forward-looking
-(``next_n_bar_return``, ``next_n_bar_realized_vol``), correlating row-aligned
+(``next_n_bar_return``, ``next_n_bar_realized_volatility``), correlating row-aligned
 columns already compares "signal today" with "outcome tomorrow"; no extra
 shifting is needed here.
 
@@ -19,7 +19,7 @@ Rank (Spearman) correlation is the default everywhere because features and
 returns are heavy-tailed; a single outlier can dominate a Pearson correlation
 while ranks are unaffected.
 
-A note on significance: the descriptive statistics here (mean IC, ICIR) do not
+A note on significance: the descriptive statistics here (mean IC, IC information ratio) do not
 correct for the serial dependence created by overlapping forward windows. For
 inference use ``regression.newey_west_regression``, which handles that overlap
 through heteroskedasticity- and autocorrelation-consistent standard errors.
@@ -59,7 +59,7 @@ def _paired(frame: pd.DataFrame, feature: str, target: str) -> pd.DataFrame:
     for column in (feature, target):
         if column not in frame.columns:
             raise KeyError(f"Column {column!r} not found in the feature frame.")
-    paired = frame.loc[:, ["symbol", "ts", feature, target]].copy()
+    paired = frame.loc[:, ["symbol", "timestamp", feature, target]].copy()
     paired[[feature, target]] = paired[[feature, target]].replace(
         [np.inf, -np.inf], np.nan
     )
@@ -79,7 +79,7 @@ def time_series_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``ts``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
     feature
         Feature column name.
     target
@@ -124,7 +124,7 @@ def cross_sectional_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``ts``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
     feature
         Feature column name.
     target
@@ -138,7 +138,7 @@ def cross_sectional_ic(
     Returns
     -------
     pandas.Series
-        IC per timestamp, indexed by ``ts``, only for timestamps that meet
+        IC per timestamp, indexed by ``timestamp``, only for timestamps that meet
         ``min_symbols``. Empty if no timestamp qualifies.
     """
     _validate_method(method)
@@ -146,13 +146,13 @@ def cross_sectional_ic(
 
     # Group sizes first, so undersized timestamps are dropped in one pass
     # instead of producing NaN placeholders.
-    sizes = paired.groupby("ts").size()
+    sizes = paired.groupby("timestamp").size()
     valid_timestamps = sizes.index[sizes >= min_symbols]
-    qualified = paired[paired["ts"].isin(valid_timestamps)]
+    qualified = paired[paired["timestamp"].isin(valid_timestamps)]
     if qualified.empty:
         return pd.Series(dtype="float64", name="ic")
 
-    per_timestamp = qualified.groupby("ts").apply(
+    per_timestamp = qualified.groupby("timestamp").apply(
         lambda g: float(g[feature].corr(g[target], method=method))
     )
     return per_timestamp.rename("ic")
@@ -175,7 +175,7 @@ def rolling_ic(
     Parameters
     ----------
     frame
-        Long feature frame with ``symbol``, ``ts``, feature, and target columns.
+        Long feature frame with ``symbol``, ``timestamp``, feature, and target columns.
     feature
         Feature column name.
     target
@@ -188,7 +188,7 @@ def rolling_ic(
     Returns
     -------
     pandas.DataFrame
-        Columns ``symbol``, ``ts``, ``ic``. One row per (symbol, window end);
+        Columns ``symbol``, ``timestamp``, ``ic``. One row per (symbol, window end);
         the first ``window - 1`` rows of each symbol are omitted because their
         windows are incomplete.
     """
@@ -199,7 +199,7 @@ def rolling_ic(
 
     results: list[pd.DataFrame] = []
     for symbol, symbol_frame in paired.groupby("symbol"):
-        ordered = symbol_frame.sort_values("ts")
+        ordered = symbol_frame.sort_values("timestamp")
         if method == "spearman":
             # Rolling Spearman = rolling Pearson on full-sample ranks is NOT
             # exact (ranks must be recomputed inside each window), so compute
@@ -214,12 +214,12 @@ def rolling_ic(
                 .corr(ordered[target])
             )
         block = pd.DataFrame(
-            {"symbol": symbol, "ts": ordered["ts"].to_numpy(), "ic": values.to_numpy()}
+            {"symbol": symbol, "timestamp": ordered["timestamp"].to_numpy(), "ic": values.to_numpy()}
         )
         results.append(block.dropna(subset=["ic"]))
 
     if not results:
-        return pd.DataFrame(columns=["symbol", "ts", "ic"])
+        return pd.DataFrame(columns=["symbol", "timestamp", "ic"])
     return pd.concat(results, ignore_index=True)
 
 
@@ -269,11 +269,11 @@ def ic_summary(ic_values: pd.Series) -> dict[str, float]:
     Returns
     -------
     dict
-        ``mean_ic``: average IC. ``std_ic``: standard deviation across
-        observations. ``icir``: information coefficient information ratio,
-        mean_ic / std_ic — a signal-to-noise measure of the IC itself.
+        ``mean_ic``: average IC. ``ic_standard_deviation``: standard deviation across
+        observations. ``ic_information_ratio``: information coefficient information ratio,
+        mean_ic / ic_standard_deviation — a signal-to-noise measure of the IC itself.
         ``share_positive``: fraction of observations with IC > 0.
-        ``n``: number of IC observations.
+        ``observations``: number of IC values summarized.
 
     Notes
     -----
@@ -286,18 +286,18 @@ def ic_summary(ic_values: pd.Series) -> dict[str, float]:
     if n == 0:
         return {
             "mean_ic": np.nan,
-            "std_ic": np.nan,
-            "icir": np.nan,
+            "ic_standard_deviation": np.nan,
+            "ic_information_ratio": np.nan,
             "share_positive": np.nan,
-            "n": 0,
+            "observations": 0,
         }
     mean_ic = float(clean.mean())
-    std_ic = float(clean.std())
-    icir = mean_ic / std_ic if std_ic > 0 else np.nan
+    ic_standard_deviation = float(clean.std())
+    ic_information_ratio = mean_ic / ic_standard_deviation if ic_standard_deviation > 0 else np.nan
     return {
         "mean_ic": mean_ic,
-        "std_ic": std_ic,
-        "icir": icir,
+        "ic_standard_deviation": ic_standard_deviation,
+        "ic_information_ratio": ic_information_ratio,
         "share_positive": float((clean > 0).mean()),
-        "n": n,
+        "observations": n,
     }
