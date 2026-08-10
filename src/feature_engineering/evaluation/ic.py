@@ -214,7 +214,11 @@ def rolling_ic(
                 .corr(ordered[target])
             )
         block = pd.DataFrame(
-            {"symbol": symbol, "timestamp": ordered["timestamp"].to_numpy(), "ic": values.to_numpy()}
+            {
+                "symbol": symbol,
+                "timestamp": ordered["timestamp"].to_numpy(),
+                "ic": values.to_numpy(),
+            }
         )
         results.append(block.dropna(subset=["ic"]))
 
@@ -293,7 +297,9 @@ def ic_summary(ic_values: pd.Series) -> dict[str, float]:
         }
     mean_ic = float(clean.mean())
     ic_standard_deviation = float(clean.std())
-    ic_information_ratio = mean_ic / ic_standard_deviation if ic_standard_deviation > 0 else np.nan
+    ic_information_ratio = (
+        mean_ic / ic_standard_deviation if ic_standard_deviation > 0 else np.nan
+    )
     return {
         "mean_ic": mean_ic,
         "ic_standard_deviation": ic_standard_deviation,

@@ -36,7 +36,9 @@ def _config(feature_name: str, function_name: str) -> dict[str, Any]:
     """Return a minimal config dict enabling exactly one feature."""
     return {
         "features": {
-            "parameters": [{"name": feature_name, "function": function_name, "enabled": True}]
+            "parameters": [
+                {"name": feature_name, "function": function_name, "enabled": True}
+            ]
         }
     }
 

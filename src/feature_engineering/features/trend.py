@@ -55,7 +55,9 @@ def moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda parameters: int(parameters.get("window", DEFAULT_MOVING_AVERAGE_WINDOW)),
+    lookback=lambda parameters: int(
+        parameters.get("window", DEFAULT_MOVING_AVERAGE_WINDOW)
+    ),
     description="Close price divided by its moving average minus one.",
     calculation="close_t / moving_average_t - 1",
 )
@@ -88,7 +90,9 @@ def price_vs_moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
 
 @register(
     category="trend",
-    lookback=lambda parameters: int(parameters.get("periods", DEFAULT_RATE_OF_CHANGE_PERIODS)),
+    lookback=lambda parameters: int(
+        parameters.get("periods", DEFAULT_RATE_OF_CHANGE_PERIODS)
+    ),
     description="Rate of change over a fixed number of rows.",
     calculation="close_t / close_{t-periods} - 1",
 )

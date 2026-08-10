@@ -18,7 +18,10 @@ from feature_engineering.features.trend import (
     price_vs_moving_average,
     rate_of_change,
 )
-from feature_engineering.features.volatility import bar_range_percent, rolling_standard_deviation
+from feature_engineering.features.volatility import (
+    bar_range_percent,
+    rolling_standard_deviation,
+)
 from feature_engineering.features.volume import (
     dollar_volume,
     volume_change,

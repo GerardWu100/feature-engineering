@@ -61,7 +61,9 @@ def test_validate_config_rejects_unknown_feature_function() -> None:
     config = _valid_csv_config()
     config["features"]["parameters"][0]["function"] = "not_a_feature"
 
-    with pytest.raises(ConfigValidationError, match="features.parameters\\[0\\].function"):
+    with pytest.raises(
+        ConfigValidationError, match="features.parameters\\[0\\].function"
+    ):
         validate_config(config)
 
 
@@ -117,7 +119,9 @@ def test_validate_config_rejects_window_below_one() -> None:
     config = _valid_csv_config()
     config["features"]["parameters"][1]["window"] = 0
 
-    with pytest.raises(ConfigValidationError, match="features.parameters\\[1\\].window"):
+    with pytest.raises(
+        ConfigValidationError, match="features.parameters\\[1\\].window"
+    ):
         validate_config(config)
 
 

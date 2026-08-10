@@ -221,7 +221,9 @@ def test_duplicated_symbol_does_not_shrink_the_standard_error() -> None:
     doubled = pd.concat([single, clone], ignore_index=True)
 
     single_result = newey_west_regression(single, "signal", "fwd_target", kernel_lags=5)
-    doubled_result = newey_west_regression(doubled, "signal", "fwd_target", kernel_lags=5)
+    doubled_result = newey_west_regression(
+        doubled, "signal", "fwd_target", kernel_lags=5
+    )
 
     assert np.isclose(doubled_result.beta, single_result.beta, rtol=1e-8)
     assert doubled_result.beta_standard_error > 0.95 * single_result.beta_standard_error
@@ -236,7 +238,9 @@ def test_regression_result_is_invariant_to_row_order() -> None:
     by_time = newey_west_regression(shuffled, "signal", "fwd_target", kernel_lags=5)
 
     assert np.isclose(by_symbol.beta, by_time.beta, rtol=1e-10)
-    assert np.isclose(by_symbol.beta_standard_error, by_time.beta_standard_error, rtol=1e-10)
+    assert np.isclose(
+        by_symbol.beta_standard_error, by_time.beta_standard_error, rtol=1e-10
+    )
 
 
 def test_hac_lags_matter_for_autocorrelated_errors() -> None:

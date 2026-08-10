@@ -104,7 +104,12 @@ def test_compute_features_respects_category_filters() -> None:
             "exclude_categories": ["target"],
             "parameters": [
                 {"name": "log_return", "function": "log_return", "enabled": True},
-                {"name": "ma_2", "function": "moving_average", "window": 2, "enabled": True},
+                {
+                    "name": "ma_2",
+                    "function": "moving_average",
+                    "window": 2,
+                    "enabled": True,
+                },
                 {"name": "range", "function": "bar_range_percent", "enabled": True},
                 {
                     "name": "next_day",

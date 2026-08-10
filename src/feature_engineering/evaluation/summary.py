@@ -127,5 +127,8 @@ def evaluate_features(
 
     table = pd.DataFrame(rows)
     return table.reindex(
-        table["t_statistic"].abs().sort_values(ascending=False, na_position="last").index
+        table["t_statistic"]
+        .abs()
+        .sort_values(ascending=False, na_position="last")
+        .index
     ).reset_index(drop=True)

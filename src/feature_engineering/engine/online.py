@@ -417,7 +417,9 @@ ONLINE_FEATURE_FACTORIES: dict[str, Callable[[dict[str, Any]], OnlineFeature]] =
     "rate_of_change": lambda parameters: _RateOfChange(
         int(parameters.get("periods", DEFAULT_RATE_OF_CHANGE_PERIODS))
     ),
-    "rolling_standard_deviation": lambda parameters: _RollingStd(int(parameters["window"])),
+    "rolling_standard_deviation": lambda parameters: _RollingStd(
+        int(parameters["window"])
+    ),
     "volume_ratio": lambda parameters: _VolumeRatio(int(parameters["window"])),
     "relative_strength_index": lambda parameters: _Rsi(
         int(parameters.get("window", DEFAULT_RSI_WINDOW))
@@ -563,7 +565,13 @@ class OnlineFeatureEngine:
         rows: list[dict[str, Any]] = []
         for bar in sorted_frame.to_dict("records"):
             feature_values = self.update(bar)
-            rows.append({"symbol": bar["symbol"], "timestamp": bar["timestamp"], **feature_values})
+            rows.append(
+                {
+                    "symbol": bar["symbol"],
+                    "timestamp": bar["timestamp"],
+                    **feature_values,
+                }
+            )
         return pd.DataFrame(rows, columns=["symbol", "timestamp", *self.feature_names])
 
     def _session_date(self, bar: Mapping[str, Any]) -> Any:

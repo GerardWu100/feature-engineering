@@ -24,9 +24,17 @@ ALL_ONLINE_FEATURES = {
             {"name": "bar_range_percent", "function": "bar_range_percent"},
             {"name": "dollar_volume", "function": "dollar_volume"},
             {"name": "ma_5", "function": "moving_average", "window": 5},
-            {"name": "price_vs_sma_10", "function": "price_vs_moving_average", "window": 10},
+            {
+                "name": "price_vs_sma_10",
+                "function": "price_vs_moving_average",
+                "window": 10,
+            },
             {"name": "roc_4", "function": "rate_of_change", "periods": 4},
-            {"name": "rolling_std_6", "function": "rolling_standard_deviation", "window": 6},
+            {
+                "name": "rolling_std_6",
+                "function": "rolling_standard_deviation",
+                "window": 6,
+            },
             {"name": "volume_ratio_5", "function": "volume_ratio", "window": 5},
             {"name": "rsi_14", "function": "relative_strength_index", "window": 14},
             {"name": "atr_10", "function": "average_true_range", "window": 10},
@@ -124,7 +132,9 @@ def test_feature_engine_resolves_and_caches_feature_names() -> None:
     assert "vwap" in engine.feature_names
 
     with pytest.raises(KeyError):
-        FeatureEngine({"features": {"parameters": [{"name": "x", "function": "does_not_exist"}]}})
+        FeatureEngine(
+            {"features": {"parameters": [{"name": "x", "function": "does_not_exist"}]}}
+        )
 
 
 def test_online_engine_rejects_forward_looking_targets() -> None:
@@ -165,7 +175,13 @@ def test_macd_histogram_equals_line_minus_signal() -> None:
         "features": {
             "parameters": [
                 {"name": "line", "function": "macd_line", "fast": 4, "slow": 8},
-                {"name": "sig", "function": "macd_signal", "fast": 4, "slow": 8, "signal": 3},
+                {
+                    "name": "sig",
+                    "function": "macd_signal",
+                    "fast": 4,
+                    "slow": 8,
+                    "signal": 3,
+                },
                 {
                     "name": "hist",
                     "function": "macd_histogram",

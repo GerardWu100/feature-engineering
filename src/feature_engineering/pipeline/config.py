@@ -290,7 +290,9 @@ def _validate_feature_items(raw_feature_items: Any) -> None:
     active_feature_names: set[str] = set()
     for index, feature_item in enumerate(raw_feature_items):
         if not isinstance(feature_item, dict):
-            raise ConfigValidationError(f"features.parameters[{index}] must be a table.")
+            raise ConfigValidationError(
+                f"features.parameters[{index}] must be a table."
+            )
 
         _validate_feature_item(feature_item, index)
 
