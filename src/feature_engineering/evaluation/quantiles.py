@@ -61,9 +61,7 @@ def _bucket_labels(
 
     if by_symbol:
         labels = paired.groupby("symbol")[feature].transform(_bucket_one_series)
-        dropped_symbols = sorted(
-            paired.loc[labels.isna(), "symbol"].unique().tolist()
-        )
+        dropped_symbols = sorted(paired.loc[labels.isna(), "symbol"].unique().tolist())
         if dropped_symbols:
             warnings.warn(
                 f"Feature {feature!r}: {len(dropped_symbols)} symbol(s) "
