@@ -3,11 +3,11 @@ name = "feature-engineering"
 version = "0.1.0"
 description = "Simple categorized feature engineering pipeline for stock OHLCV data"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.13"
 dependencies = [
     "clickhouse-connect>=0.13.0",
     "matplotlib>=3.11.1",
-    "numpy<2",
+    "numpy>=2",
     "pandas>=3.0.1",
     "pyarrow>=23.0.1",
     "python-dotenv>=1.2.1",
