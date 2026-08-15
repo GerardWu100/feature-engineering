@@ -10,8 +10,8 @@ import pandas as pd
 
 from feature_engineering.engineering.features.registry import as_feature_column, register
 
-# Keep defaults next to the batch definitions. The online engine imports the
-# same values, so an omitted configuration parameter has one meaning everywhere.
+# Named defaults so an omitted parameter means the same thing whether the
+# feature is called directly or configured in config.toml.
 DEFAULT_MOVING_AVERAGE_WINDOW = 20
 DEFAULT_RATE_OF_CHANGE_PERIODS = 20
 DEFAULT_RSI_WINDOW = 14
@@ -22,19 +22,25 @@ DEFAULT_MACD_SIGNAL = 9
 
 @register(
     category="trend",
-    lookback=lambda parameters: parameters["window"],
+    lookback=lambda parameters: int(
+        parameters.get("window", DEFAULT_MOVING_AVERAGE_WINDOW)
+    ),
     description="Simple moving average of close prices over a rolling window.",
     calculation="mean(close) over trailing window",
 )
-def moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def moving_average(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_MOVING_AVERAGE_WINDOW,
+) -> pd.Series:
     """Compute a simple moving average of close prices.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with ``close`` values sorted by time.
-    parameters
-        Requires ``window``, the number of rows in the rolling average.
+    window
+        Number of rows in the rolling average. Default is 20.
 
     Returns
     -------
@@ -42,7 +48,7 @@ def moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
         Moving-average values aligned to ``frame.index``. The first ``window - 1``
         rows are ``NaN`` because a full window is required.
     """
-    window = int(parameters["window"])
+    window = int(window)
     if window < 1:
         raise ValueError("moving_average requires window >= 1.")
 
@@ -60,22 +66,26 @@ def moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="Close price divided by its moving average minus one.",
     calculation="close_t / moving_average_t - 1",
 )
-def price_vs_moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def price_vs_moving_average(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_MOVING_AVERAGE_WINDOW,
+) -> pd.Series:
     """Compute normalized distance between close and its moving average.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Supports ``window`` as the rolling average length. Default is 20 rows.
+    window
+        Rolling average length. Default is 20 rows.
 
     Returns
     -------
     pandas.Series
         Dimensionless distance from the moving average, aligned to ``frame.index``.
     """
-    window = int(parameters.get("window", DEFAULT_MOVING_AVERAGE_WINDOW))
+    window = int(window)
     if window < 1:
         raise ValueError("price_vs_moving_average requires window >= 1.")
 
@@ -95,22 +105,26 @@ def price_vs_moving_average(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="Rate of change over a fixed number of rows.",
     calculation="close_t / close_{t-periods} - 1",
 )
-def rate_of_change(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def rate_of_change(
+    frame: pd.DataFrame,
+    *,
+    periods: int = DEFAULT_RATE_OF_CHANGE_PERIODS,
+) -> pd.Series:
     """Compute lagged percentage price change.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Supports ``periods`` as the lag length. Default is 20 rows.
+    periods
+        Lag length. Default is 20 rows.
 
     Returns
     -------
     pandas.Series
         Percentage price change over ``periods`` rows, aligned to ``frame.index``.
     """
-    periods = int(parameters.get("periods", DEFAULT_RATE_OF_CHANGE_PERIODS))
+    periods = int(periods)
     if periods < 1:
         raise ValueError("rate_of_change requires periods >= 1.")
 
@@ -160,7 +174,11 @@ def _wilder_average(values: pd.Series, window: int) -> pd.Series:
     description="Wilder's Relative Strength Index momentum oscillator (0-100).",
     calculation="100 - 100 / (1 + avg_gain / avg_loss), Wilder-smoothed over window",
 )
-def relative_strength_index(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def relative_strength_index(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_RSI_WINDOW,
+) -> pd.Series:
     """Compute Wilder's Relative Strength Index.
 
     The Relative Strength Index measures the ratio of average up-moves to
@@ -175,8 +193,8 @@ def relative_strength_index(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    parameters
-        Supports ``window`` (default 14), the smoothing length in bars.
+    window
+        Smoothing length in bars. Default is 14.
 
     Returns
     -------
@@ -189,7 +207,7 @@ def relative_strength_index(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ValueError
         If ``window`` is less than two.
     """
-    window = int(parameters.get("window", DEFAULT_RSI_WINDOW))
+    window = int(window)
     if window < 2:
         raise ValueError("relative_strength_index requires window >= 2.")
 
@@ -243,15 +261,20 @@ def _macd_signal_from_line(macd: pd.Series, signal: int) -> pd.Series:
     description="MACD line: difference between fast and slow EMAs of close.",
     calculation="EMA(close, fast) - EMA(close, slow)",
 )
-def macd_line(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def macd_line(
+    frame: pd.DataFrame,
+    *,
+    fast: int = DEFAULT_MACD_FAST,
+    slow: int = DEFAULT_MACD_SLOW,
+) -> pd.Series:
     """Compute the MACD (Moving Average Convergence Divergence) line.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Supports ``fast`` (default 12) and ``slow`` (default 26) EMA spans.
+    fast, slow
+        EMA spans. Defaults are 12 and 26; ``fast`` must be less than ``slow``.
 
     Returns
     -------
@@ -263,8 +286,7 @@ def macd_line(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ValueError
         If ``fast`` is not less than ``slow``.
     """
-    fast = int(parameters.get("fast", DEFAULT_MACD_FAST))
-    slow = int(parameters.get("slow", DEFAULT_MACD_SLOW))
+    fast, slow = int(fast), int(slow)
     if fast >= slow:
         raise ValueError("macd_line requires fast < slow.")
 
@@ -280,15 +302,21 @@ def macd_line(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="MACD signal line: EMA of the MACD line.",
     calculation="EMA(MACD_line, signal)",
 )
-def macd_signal(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def macd_signal(
+    frame: pd.DataFrame,
+    *,
+    fast: int = DEFAULT_MACD_FAST,
+    slow: int = DEFAULT_MACD_SLOW,
+    signal: int = DEFAULT_MACD_SIGNAL,
+) -> pd.Series:
     """Compute the MACD signal line (EMA of the MACD line).
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Supports ``fast`` (12), ``slow`` (26), and ``signal`` (9) spans.
+    fast, slow, signal
+        EMA spans. Defaults are 12, 26, and 9; ``fast`` must be less than ``slow``.
 
     Returns
     -------
@@ -297,9 +325,7 @@ def macd_signal(frame: pd.DataFrame, parameters: dict) -> pd.Series:
         rows are dropped before the signal EMA so it seeds cleanly, then the
         result is reindexed back.
     """
-    fast = int(parameters.get("fast", DEFAULT_MACD_FAST))
-    slow = int(parameters.get("slow", DEFAULT_MACD_SLOW))
-    signal = int(parameters.get("signal", DEFAULT_MACD_SIGNAL))
+    fast, slow, signal = int(fast), int(slow), int(signal)
     if fast >= slow:
         raise ValueError("macd_signal requires fast < slow.")
 
@@ -318,24 +344,28 @@ def macd_signal(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="MACD histogram: MACD line minus signal line.",
     calculation="MACD_line - EMA(MACD_line, signal)",
 )
-def macd_histogram(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def macd_histogram(
+    frame: pd.DataFrame,
+    *,
+    fast: int = DEFAULT_MACD_FAST,
+    slow: int = DEFAULT_MACD_SLOW,
+    signal: int = DEFAULT_MACD_SIGNAL,
+) -> pd.Series:
     """Compute the MACD histogram (MACD line minus signal line).
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Supports ``fast`` (12), ``slow`` (26), and ``signal`` (9) spans.
+    fast, slow, signal
+        EMA spans. Defaults are 12, 26, and 9; ``fast`` must be less than ``slow``.
 
     Returns
     -------
     pandas.Series
         Histogram aligned to ``frame.index``; valid once the signal line is valid.
     """
-    fast = int(parameters.get("fast", DEFAULT_MACD_FAST))
-    slow = int(parameters.get("slow", DEFAULT_MACD_SLOW))
-    signal = int(parameters.get("signal", DEFAULT_MACD_SIGNAL))
+    fast, slow, signal = int(fast), int(slow), int(signal)
     if fast >= slow:
         raise ValueError("macd_histogram requires fast < slow.")
 

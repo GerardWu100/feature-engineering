@@ -50,7 +50,7 @@ def _register_contract_feature(
 ) -> None:
     """Register a temporary feature returning fixed values, test-scoped."""
 
-    def contract_feature(frame: pd.DataFrame, parameters: dict[str, Any]) -> object:
+    def contract_feature(frame: pd.DataFrame) -> object:
         return values
 
     monkeypatch.setitem(

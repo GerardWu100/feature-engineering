@@ -12,23 +12,31 @@ import pandas as pd
 from feature_engineering.engineering.features.registry import as_feature_column, register
 from feature_engineering.engineering.features.trend import _wilder_average
 
+# Default rolling window (in price rows) for the log-return standard deviation.
+DEFAULT_ROLLING_STANDARD_DEVIATION_WINDOW = 20
+
 
 @register(
     category="volatility",
-    lookback=lambda parameters: parameters["window"],
+    lookback=lambda parameters: int(
+        parameters.get("window", DEFAULT_ROLLING_STANDARD_DEVIATION_WINDOW)
+    ),
     description="Rolling standard deviation of log returns.",
     calculation="std(ln(close_t / close_{t-1})) over trailing window",
 )
-def rolling_standard_deviation(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def rolling_standard_deviation(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_ROLLING_STANDARD_DEVIATION_WINDOW,
+) -> pd.Series:
     """Compute rolling standard deviation of log returns.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column.
-    parameters
-        Requires ``window``, the number of price rows in the rolling standard
-        deviation context.
+    window
+        Number of price rows in the rolling standard deviation. Default is 20.
 
     Returns
     -------
@@ -37,7 +45,7 @@ def rolling_standard_deviation(frame: pd.DataFrame, parameters: dict) -> pd.Seri
         ``window=3``, the third price can produce a value from the two returns
         formed by those three prices.
     """
-    window = int(parameters["window"])
+    window = int(window)
     if window < 2:
         raise ValueError("rolling_standard_deviation requires window >= 2.")
 
@@ -60,15 +68,13 @@ def rolling_standard_deviation(frame: pd.DataFrame, parameters: dict) -> pd.Seri
     description="High-low bar range as a fraction of close.",
     calculation="(high_t - low_t) / close_t",
 )
-def bar_range_percent(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def bar_range_percent(frame: pd.DataFrame) -> pd.Series:
     """Compute intrabar high-low range as a percent of close.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with ``high``, ``low``, and ``close`` columns.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
@@ -93,7 +99,11 @@ DEFAULT_ATR_WINDOW = 14
         "high - low, |high - previous_close|, |low - previous_close|)"
     ),
 )
-def average_true_range(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def average_true_range(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_ATR_WINDOW,
+) -> pd.Series:
     """Compute Wilder's Average True Range.
 
     True range for a bar is the largest of three distances:
@@ -111,8 +121,8 @@ def average_true_range(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ----------
     frame
         Single-symbol OHLCV frame with ``high``, ``low``, and ``close`` columns.
-    parameters
-        Supports ``window`` (default 14), the Wilder smoothing length in bars.
+    window
+        Wilder smoothing length in bars. Default is 14.
 
     Returns
     -------
@@ -124,7 +134,7 @@ def average_true_range(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ValueError
         If ``window`` is less than two.
     """
-    window = int(parameters.get("window", DEFAULT_ATR_WINDOW))
+    window = int(window)
     if window < 2:
         raise ValueError("average_true_range requires window >= 2.")
 

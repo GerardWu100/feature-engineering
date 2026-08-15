@@ -19,15 +19,13 @@ from feature_engineering.engineering.features.registry import as_feature_column,
     description="Natural-log return from one close to the next.",
     calculation="ln(close_t / close_{t-1})",
 )
-def log_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def log_return(frame: pd.DataFrame) -> pd.Series:
     """Compute one-period log returns from close prices.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
@@ -48,15 +46,13 @@ def log_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="Simple percentage return from one close to the next.",
     calculation="close_t / close_{t-1} - 1",
 )
-def simple_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def simple_return(frame: pd.DataFrame) -> pd.Series:
     """Compute one-period simple returns from close prices.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------

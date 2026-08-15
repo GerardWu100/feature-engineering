@@ -22,7 +22,7 @@ from feature_engineering.engineering.features.registry import (
     description="Forward N-bar simple return target from the current bar close.",
     calculation="close_{t+bars} / close_t - 1",
 )
-def next_n_bar_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def next_n_bar_return(frame: pd.DataFrame, *, bars: int = 1) -> pd.Series:
     """Compute a forward N-bar return target from each current bar.
 
     The horizon is measured in bars (rows), not calendar days. A bar is one row
@@ -38,9 +38,8 @@ def next_n_bar_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
         Single-symbol OHLCV frame with a ``close`` column, sorted by time. The
         pipeline guarantees this ordering and per-symbol isolation, so the
         forward shift below never reaches into another ticker's rows.
-    parameters
-        Supports ``bars`` as the positive integer forecast horizon in rows.
-        Default is 1.
+    bars
+        Positive integer forecast horizon in rows. Default is 1.
 
     Returns
     -------
@@ -55,7 +54,7 @@ def next_n_bar_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ValueError
         If ``bars`` is less than one.
     """
-    bars = int(parameters.get("bars", 1))
+    bars = int(bars)
     if bars < 1:
         raise ValueError("next_n_bar_return requires bars >= 1.")
 
@@ -80,7 +79,11 @@ DEFAULT_REALIZED_VOLATILITY_BARS = 20
     description="Forward realized volatility: std of the next N one-bar log returns.",
     calculation="std(ln(close_{t+k} / close_{t+k-1}) for k = 1..bars)",
 )
-def next_n_bar_realized_volatility(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def next_n_bar_realized_volatility(
+    frame: pd.DataFrame,
+    *,
+    bars: int = DEFAULT_REALIZED_VOLATILITY_BARS,
+) -> pd.Series:
     """Compute a forward realized-volatility target from each current bar.
 
     This is the volatility analog of ``next_n_bar_return``: instead of asking
@@ -104,9 +107,9 @@ def next_n_bar_realized_volatility(frame: pd.DataFrame, parameters: dict) -> pd.
         Single-symbol OHLCV frame with a ``close`` column, sorted by time. The
         pipeline guarantees per-symbol isolation, so the forward window never
         reaches into another ticker's rows.
-    parameters
-        Supports ``bars``, the positive integer forecast horizon in rows.
-        Default is ``DEFAULT_REALIZED_VOLATILITY_BARS``. Must be at least 2 because a
+    bars
+        Positive integer forecast horizon in rows. Default is
+        ``DEFAULT_REALIZED_VOLATILITY_BARS``. Must be at least 2 because a
         standard deviation of a single return is undefined.
 
     Returns
@@ -120,7 +123,7 @@ def next_n_bar_realized_volatility(frame: pd.DataFrame, parameters: dict) -> pd.
     ValueError
         If ``bars`` is less than two.
     """
-    bars = int(parameters.get("bars", DEFAULT_REALIZED_VOLATILITY_BARS))
+    bars = int(bars)
     if bars < 2:
         raise ValueError(
             "next_n_bar_realized_volatility requires bars >= 2 because the standard "

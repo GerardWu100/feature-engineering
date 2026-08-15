@@ -172,7 +172,9 @@ def _compute_feature_series_by_group(
     # Compute each group separately. This makes the isolation rule explicit and
     # avoids hiding the feature call behind a groupby/apply lambda.
     for _group_key, group_frame in grouped:
-        group_values = spec.function(group_frame, parameters)
+        # Config parameters become plain keyword arguments, the same call shape
+        # a user writes directly: moving_average(frame, window=20).
+        group_values = spec.function(group_frame, **parameters)
         _validate_feature_result(
             feature_name,
             group_values,

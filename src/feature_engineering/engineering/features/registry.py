@@ -13,7 +13,9 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-FeatureCallable = Callable[[pd.DataFrame, dict], pd.Series]
+# A feature function takes one symbol's OHLCV frame plus optional keyword
+# parameters (window=..., bars=..., ...) and returns one aligned Series.
+FeatureCallable = Callable[..., pd.Series]
 Lookback = int | Callable[[dict], int]
 
 REGISTRY: dict[str, FeatureSpec] = {}
@@ -38,7 +40,7 @@ class FeatureSpec:
     Parameters
     ----------
     function
-        Callable that receives one symbol's OHLCV data and a parameter dict.
+        Callable that receives one symbol's OHLCV data plus keyword parameters.
     category
         Group name used by config filters, such as ``returns`` or ``trend``.
     lookback

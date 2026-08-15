@@ -2,7 +2,7 @@
 
 ## Part 1 - Conceptual Explanation
 
-`features/` contains stock OHLCV feature functions. Each function receives one
+`features/` contains stock OHLCV feature functions. Each function takes one
 symbol's time-sorted data and returns a pandas `Series` with the same index.
 
 Files are organized by category:
@@ -16,17 +16,23 @@ Files are organized by category:
 | `volume.py` | `volume` | candle + volume | Trading activity and liquidity context. |
 | `registry.py` | feature menu | - | Maps config function names to real functions and metadata. |
 
-The `target` category is different: a target is the value a model tries to
-predict. Targets live in `targets.py` because they look into the future and
-must never be used as live input signals.
+The `target` category is different. A target is the value a model tries to
+predict. Targets live in `targets.py` because they use future data and must
+never be used as live input signals.
 
-`next_n_bar_return` is a forward simple return over a fixed number of bars (rows), not calendar days:
+`next_n_bar_return` is a forward simple return over a fixed number of bars
+(rows), not calendar days:
 
 $$
 \text{target}_t = \frac{C_{t+n}}{C_t} - 1
 $$
 
-Here $C_t$ is the close at the current row and $n$ is the configured horizon in bars (`bars`). A bar is one row of the input: a daily bar on daily data, a one-minute bar on one-minute data. The final $n$ rows are `NaN` because their future close is unavailable. For intraday data, enable `reset_by_session` (see `engineering/compute.py`) so the forward shift does not cross the overnight gap.
+Here $C_t$ is the close at the current row and $n$ is the configured horizon
+in bars (`bars`). A bar is one input row: a daily bar in daily data or a
+one-minute bar in one-minute data. The final $n$ rows are `NaN` because their
+future close is unavailable. For intraday data, enable `reset_by_session` (see
+`engineering/compute.py`) so the forward shift does not cross the overnight
+gap.
 
 `next_n_bar_realized_volatility` is the volatility counterpart: instead of
 direction, it labels how unstable price will be. It is the sample standard
@@ -39,8 +45,8 @@ $$
 
 The value is per-bar volatility in decimal-return units, not annualized. It
 uses the same sample standard deviation as the backward-looking
-`rolling_standard_deviation` feature. Together, they test whether the previous
-window's statistic predicts the next window's statistic.
+`rolling_standard_deviation` feature. Together, these features test whether
+the previous window's statistic predicts the next window's statistic.
 `bars` must be at least 2 because the standard deviation of one return is
 undefined.
 
@@ -54,6 +60,12 @@ undefined.
 | `trend.py` | `moving_average`, `price_vs_moving_average`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram`. |
 | `volatility.py` | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range`. |
 | `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap`. |
+
+Every feature is a plain function with keyword parameters, so you can call it
+without a config file: `moving_average(frame, window=20)`,
+`relative_strength_index(frame)` (defaults apply when a parameter is omitted),
+`next_n_bar_return(frame, bars=5)`. The pipeline calls the same functions by
+unpacking each config entry's parameters into keyword arguments.
 
 Add a new feature by placing it in the matching category file and decorating it
 with `@register(...)`.
@@ -69,3 +81,4 @@ with `@register(...)`.
 - 2026-08-09: All feature parameter defaults (`DEFAULT_MOVING_AVERAGE_WINDOW`, `DEFAULT_RATE_OF_CHANGE_PERIODS`, Relative Strength Index and Moving Average Convergence/Divergence constants) now live at the top of `trend.py` and are imported by the online engine, so an omitted configuration parameter means the same thing on both paths. `average_true_range` reuses the shared `_wilder_average` helper, and `macd_histogram` computes the convergence/divergence line once and feeds it to the signal helper.
 - 2026-08-10: Renamed every non-standard abbreviation in the user-facing surface so the config and data contract read as plain words: config key `fn` -> `function`, `[[features.params]]` -> `[[features.parameters]]`, column `ts` -> `timestamp` (the ClickHouse column is still `ts` and is aliased in the query), session `rth` -> `regular`, and the feature functions `rolling_std` -> `rolling_standard_deviation`, `bar_range_pct` -> `bar_range_percent`, `price_vs_sma` -> `price_vs_moving_average`, `next_n_bar_realized_vol` -> `next_n_bar_realized_volatility`. MACD and VWAP stay as-is because they are universally accepted finance terms.
 - 2026-08-15: Moved the forward-looking targets out of `returns.py` into their own `targets.py` so the category files match the config categories one-to-one.
+- 2026-08-15: Replaced the `(frame, parameters_dict)` feature signature with plain keyword arguments (`moving_average(frame, window=20)`), so features are directly callable pandas-style; the pipeline unpacks config parameters into the same keyword calls. Features whose one parameter used to be required (`moving_average`, `rolling_standard_deviation`, `volume_ratio`) now default to a 20-row window.

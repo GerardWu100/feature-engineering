@@ -60,8 +60,8 @@ def test_return_features_match_manual_formulas() -> None:
     """Return features should match textbook one-period return formulas."""
     frame = _sample_ohlcv_frame()
 
-    log_values = log_return(frame, {})
-    simple_values = simple_return(frame, {})
+    log_values = log_return(frame)
+    simple_values = simple_return(frame)
 
     assert pd.isna(log_values.iloc[0])
     assert pd.isna(simple_values.iloc[0])
@@ -74,8 +74,8 @@ def test_next_n_bar_return_is_forward_simple_return_over_bars() -> None:
     frame = _sample_ohlcv_frame()
     # Closes are [100, 101, 103, 104, 106].
 
-    one_bar = next_n_bar_return(frame, {"bars": 1})
-    two_bar = next_n_bar_return(frame, {"bars": 2})
+    one_bar = next_n_bar_return(frame, bars=1)
+    two_bar = next_n_bar_return(frame, bars=2)
 
     # One bar ahead: each row divided by the next close.
     assert math.isclose(one_bar.iloc[0], 101.0 / 100.0 - 1.0)
@@ -96,7 +96,7 @@ def test_next_n_bar_realized_vol_is_forward_std_of_log_returns() -> None:
     # Closes are [100, 101, 103, 104, 106], so the one-bar log returns are
     # r_1 = ln(101/100), r_2 = ln(103/101), r_3 = ln(104/103), r_4 = ln(106/104).
 
-    two_bar_vol = next_n_bar_realized_volatility(frame, {"bars": 2})
+    two_bar_vol = next_n_bar_realized_volatility(frame, bars=2)
 
     # Row 0 looks forward at (r_1, r_2); row 2 looks forward at (r_3, r_4).
     expected_row0 = float(
@@ -114,16 +114,16 @@ def test_next_n_bar_realized_vol_is_forward_std_of_log_returns() -> None:
 
     # bars = 1 is rejected: the std of a single return is undefined.
     with pytest.raises(ValueError):
-        next_n_bar_realized_volatility(frame, {"bars": 1})
+        next_n_bar_realized_volatility(frame, bars=1)
 
 
 def test_trend_features_match_manual_formulas() -> None:
     """Trend features should expose simple moving-average and lagged-return math."""
     frame = _sample_ohlcv_frame()
 
-    moving_average_values = moving_average(frame, {"window": 3})
-    price_vs_sma_values = price_vs_moving_average(frame, {"window": 3})
-    rate_of_change_values = rate_of_change(frame, {"periods": 2})
+    moving_average_values = moving_average(frame, window=3)
+    price_vs_sma_values = price_vs_moving_average(frame, window=3)
+    rate_of_change_values = rate_of_change(frame, periods=2)
 
     expected_sma = (100.0 + 101.0 + 103.0) / 3.0
     assert pd.isna(moving_average_values.iloc[0])
@@ -137,8 +137,8 @@ def test_volatility_features_match_manual_formulas() -> None:
     """Volatility features should measure return dispersion and bar range size."""
     frame = _sample_ohlcv_frame()
 
-    rolling_values = rolling_standard_deviation(frame, {"window": 3})
-    range_values = bar_range_percent(frame, {})
+    rolling_values = rolling_standard_deviation(frame, window=3)
+    range_values = bar_range_percent(frame)
 
     log_returns = np.log(
         pd.Series([100.0, 101.0, 103.0]) / pd.Series([np.nan, 100.0, 101.0])
@@ -155,7 +155,7 @@ def test_rolling_std_window_counts_prices_not_returns() -> None:
     """A volatility window of N prices should use the N - 1 returns inside that window."""
     frame = _sample_ohlcv_frame()
 
-    rolling_values = rolling_standard_deviation(frame, {"window": 3})
+    rolling_values = rolling_standard_deviation(frame, window=3)
 
     recent_prices = pd.Series([103.0, 104.0, 106.0])
     recent_log_returns = np.log(recent_prices / recent_prices.shift(1))
@@ -168,9 +168,9 @@ def test_volume_features_match_manual_formulas() -> None:
     """Volume features should expose relative, dollar, and percent-change volume."""
     frame = _sample_ohlcv_frame()
 
-    ratio_values = volume_ratio(frame, {"window": 3})
-    dollar_values = dollar_volume(frame, {})
-    change_values = volume_change(frame, {})
+    ratio_values = volume_ratio(frame, window=3)
+    dollar_values = dollar_volume(frame)
+    change_values = volume_change(frame)
 
     expected_mean_volume = (1000.0 + 1200.0 + 1800.0) / 3.0
 

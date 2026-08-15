@@ -10,29 +10,38 @@ import pandas as pd
 
 from feature_engineering.engineering.features.registry import as_feature_column, register
 
+# Default rolling window (in rows) for the relative-volume average.
+DEFAULT_VOLUME_RATIO_WINDOW = 20
+
 
 @register(
     category="volume",
-    lookback=lambda parameters: parameters["window"],
+    lookback=lambda parameters: int(
+        parameters.get("window", DEFAULT_VOLUME_RATIO_WINDOW)
+    ),
     description="Current volume divided by rolling average volume.",
     calculation="volume_t / mean(volume) over trailing window",
 )
-def volume_ratio(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def volume_ratio(
+    frame: pd.DataFrame,
+    *,
+    window: int = DEFAULT_VOLUME_RATIO_WINDOW,
+) -> pd.Series:
     """Compute current volume relative to recent average volume.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``volume`` column.
-    parameters
-        Requires ``window``, the number of rows in the rolling average.
+    window
+        Number of rows in the rolling average. Default is 20.
 
     Returns
     -------
     pandas.Series
         Relative volume aligned to ``frame.index``.
     """
-    window = int(parameters["window"])
+    window = int(window)
     if window < 1:
         raise ValueError("volume_ratio requires window >= 1.")
 
@@ -51,15 +60,13 @@ def volume_ratio(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="Dollar value traded in each bar.",
     calculation="close_t * volume_t",
 )
-def dollar_volume(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def dollar_volume(frame: pd.DataFrame) -> pd.Series:
     """Compute dollar volume as close price times share volume.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with ``close`` and ``volume`` columns.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
@@ -75,15 +82,13 @@ def dollar_volume(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="One-period percentage change in volume.",
     calculation="volume_t / volume_{t-1} - 1",
 )
-def volume_change(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def volume_change(frame: pd.DataFrame) -> pd.Series:
     """Compute one-period percentage change in volume.
 
     Parameters
     ----------
     frame
         Single-symbol OHLCV frame with a ``volume`` column.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
@@ -133,15 +138,13 @@ def _vwap_series(frame: pd.DataFrame) -> pd.Series:
     description="Cumulative Volume Weighted Average Price within the group/session.",
     calculation="cumsum((h+l+c)/3 * volume) / cumsum(volume)",
 )
-def vwap(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def vwap(frame: pd.DataFrame) -> pd.Series:
     """Compute cumulative VWAP within each computation group.
 
     Parameters
     ----------
     frame
         Single-group OHLCV frame with ``high``, ``low``, ``close``, ``volume``.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
@@ -157,7 +160,7 @@ def vwap(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     description="Close price distance from cumulative VWAP, as a fraction.",
     calculation="close_t / vwap_t - 1",
 )
-def price_vs_vwap(frame: pd.DataFrame, parameters: dict) -> pd.Series:
+def price_vs_vwap(frame: pd.DataFrame) -> pd.Series:
     """Compute the close-to-VWAP distance as a dimensionless fraction.
 
     Dividing by VWAP makes this comparable across symbols and price levels,
@@ -168,8 +171,6 @@ def price_vs_vwap(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     ----------
     frame
         Single-group OHLCV frame with ``high``, ``low``, ``close``, ``volume``.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
 
     Returns
     -------
