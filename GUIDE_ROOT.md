@@ -2,8 +2,9 @@
 
 ## Part 1 - Conceptual Explanation
 
-The root folder is intentionally thin. It holds the command wrapper, the single
-user-facing configuration file, package metadata, tests, and project guides.
+The root folder is intentionally small. It holds the command wrapper, the
+single user-facing configuration file, package metadata, tests, and project
+guides.
 
 The main workflow is:
 
@@ -19,11 +20,11 @@ config.toml
   -> outputs/stocks/
 ```
 
-The package has two major parts: `engineering` builds and stores feature
-datasets, `evaluation` tests them against targets.
+The package has two parts: `engineering` builds and stores feature datasets;
+`evaluation` tests them against targets.
 
-`config.toml` is the control surface. It chooses the data source, symbols, date
-range, output formats, cleaning rules, and the feature list, including each
+`config.toml` is the main control file. It chooses the data source, symbols,
+date range, output formats, cleaning rules, and feature list, including each
 feature column's name and parameters. Feature-category filters live in
 `[features]`.
 
@@ -40,7 +41,8 @@ feature column's name and parameters. Feature-category filters live in
 | `src/` | Importable implementation code. |
 | `tests/` | Focused tests for feature math, pipeline behavior, and package structure. |
 
-Start at `run.py` for execution, then read `src/feature_engineering/cli.py` for the top-level workflow.
+Start at `run.py` to see how execution begins, then read
+`src/feature_engineering/cli.py` for the top-level workflow.
 
 ## Part 3 - Short Journal
 

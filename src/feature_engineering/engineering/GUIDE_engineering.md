@@ -14,18 +14,17 @@ date range, and trading session, and standardizes the schema to
 `symbol, timestamp, open, high, low, close, volume`. Clean drops invalid rows
 using the config's data-quality rules. Compute applies every enabled feature
 from `features/` per symbol (and per session day when `reset_by_session` is
-on), so rolling windows never mix tickers or cross the overnight gap. Store
+on), so rolling windows do not mix tickers or cross the overnight gap. Store
 writes the dataset, a feature catalog, and a run summary to the output
-directory, and can pull a stored run back into memory.
+directory. It can also pull a stored run back into memory.
 
-Users control everything from `config.toml`: which symbols and dates to load,
-which features to compute, what each feature column is named, and each
-feature's parameters. The same feature function can appear many times under
-different names with different parameters (for example a 20-bar and a 50-bar
-moving average).
+Users control the run from `config.toml`: which symbols and dates to load,
+which features to compute, what each feature column is called, and each
+feature's parameters. The same feature function can appear more than once with
+different names and parameters, such as a 20-bar and a 50-bar moving average.
 
-Each stage is a plain function over pandas DataFrames, so research code can
-import any stage directly and skip the file-writing workflow.
+Each stage is a plain function over pandas DataFrames. Research code can import
+any stage directly and skip the file-writing workflow.
 
 ## Part 2 - Code Reference
 

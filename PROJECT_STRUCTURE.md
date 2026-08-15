@@ -1,7 +1,7 @@
 # Project Structure
 
-The project uses a small Python `src/` layout: importable code lives under
-`src/feature_engineering/`, while tests and run-time configuration stay at the
+The project uses a small Python `src/` layout. Importable code lives under
+`src/feature_engineering/`; tests and run-time configuration stay at the
 repository root.
 
 ```text

@@ -2,8 +2,8 @@
 
 ## Part 1 - Conceptual Explanation
 
-`feature_engineering/` is the project package. It prevents this code from
-exposing generic top-level import names such as `features` or `evaluation`.
+`feature_engineering/` is the project package. It keeps this code from exposing
+generic top-level import names such as `features` or `evaluation`.
 
 The package has two major parts plus a thin workflow boundary:
 
@@ -16,19 +16,19 @@ feature_engineering/
 └── cli.py          # load -> clean -> compute -> store workflow
 ```
 
-`engineering/` builds feature datasets: load OHLCV bars, clean invalid rows,
-compute the configured feature columns per symbol, and store the result on
-disk (with a matching pull-back call to read a stored run again).
-`engineering/features/` holds the quantitative formulas, grouped by category:
+`engineering/` builds feature datasets: it loads OHLCV bars, cleans invalid
+rows, computes the configured feature columns per symbol, and stores the
+result on disk. It also provides the matching call for reading a stored run
+back again. `engineering/features/` holds the formulas, grouped by category:
 returns, targets (forward-looking labels), trend, volatility, and volume.
 
-`evaluation/` tests whether computed features predict their targets with
+`evaluation/` tests whether computed features predict their targets using
 information coefficients, Newey-West regression, quantile analysis, a one-call
 summary table, and plots.
 
-This boundary matters when the project is installed or used from notebooks.
-Python searches import locations in order. A generic import such as `features`
-can accidentally resolve to another package or local folder. An import such as
+This name matters when the project is installed or used from notebooks. Python
+searches import locations in order, so a generic import such as `features` can
+resolve to another package or local folder. An import such as
 `feature_engineering.engineering.features` points back to this project.
 
 ## Part 2 - Code Reference
@@ -42,7 +42,7 @@ can accidentally resolve to another package or local folder. An import such as
 | `config.py` | Config validation (`validate_config`) at the workflow boundary. |
 | `cli.py` | CLI entry point (`main`, `run_pipeline`, `load_config`). |
 
-Start with `cli.py` for execution flow, then read
+Start with `cli.py` to follow execution, then read
 `engineering/features/registry.py` to see how configured feature names resolve
 to formulas, and `evaluation/` for feature testing after computation.
 

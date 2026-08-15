@@ -2,10 +2,10 @@
 
 ## Part 1 - Conceptual Explanation
 
-The tests protect the project shape and the formulas most likely to break.
+The tests protect the project structure and the formulas most likely to break.
 
-The suite uses small toy data so expected values can be checked by hand. It
-avoids database dependencies by testing CSV loading and pure pipeline stages
+The suite uses small toy data, so expected values can be checked by hand. It
+avoids database dependencies by testing CSV loading and pipeline stages
 directly.
 
 ## Part 2 - Code Reference

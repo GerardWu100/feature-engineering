@@ -2,8 +2,8 @@
 
 ## Part 1 - Conceptual Explanation
 
-`features/` contains pure stock OHLCV feature functions. Each function receives
-one symbol's time-sorted data and returns a pandas `Series` with the same index.
+`features/` contains stock OHLCV feature functions. Each function receives one
+symbol's time-sorted data and returns a pandas `Series` with the same index.
 
 Files are organized by category:
 
@@ -16,9 +16,9 @@ Files are organized by category:
 | `volume.py` | `volume` | candle + volume | Trading activity and liquidity context. |
 | `registry.py` | feature menu | - | Maps config function names to real functions and metadata. |
 
-The `target` category is special: a target is the value a model tries to
-predict. Targets live in their own file, `targets.py`, because they look into
-the future and must never be used as live input signals.
+The `target` category is different: a target is the value a model tries to
+predict. Targets live in `targets.py` because they look into the future and
+must never be used as live input signals.
 
 `next_n_bar_return` is a forward simple return over a fixed number of bars (rows), not calendar days:
 
@@ -37,10 +37,10 @@ $$
 \qquad r_{t+k} = \ln\frac{C_{t+k}}{C_{t+k-1}}
 $$
 
-The value is per-bar volatility in decimal-return units, not annualized. It uses
-the same sample standard deviation as the backward-looking
-`rolling_standard_deviation` feature, so the pair answers one clear question:
-can the previous window's statistic predict the next window's statistic?
+The value is per-bar volatility in decimal-return units, not annualized. It
+uses the same sample standard deviation as the backward-looking
+`rolling_standard_deviation` feature. Together, they test whether the previous
+window's statistic predicts the next window's statistic.
 `bars` must be at least 2 because the standard deviation of one return is
 undefined.
 
@@ -55,7 +55,8 @@ undefined.
 | `volatility.py` | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range`. |
 | `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap`. |
 
-Add a new feature by placing it in the matching category file and decorating it with `@register(...)`.
+Add a new feature by placing it in the matching category file and decorating it
+with `@register(...)`.
 
 ## Part 3 - Short Journal
 

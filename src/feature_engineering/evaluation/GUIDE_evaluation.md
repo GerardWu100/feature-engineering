@@ -3,31 +3,31 @@
 ## Part 1 - Conceptual Explanation
 
 `evaluation/` answers the question that follows feature computation: does a
-feature contain evidence about its target? It sits after `engineering/compute.py`
-in the research workflow and consumes the long feature frame the pipeline
-produces: one row per symbol and timestamp, with feature and target columns.
+feature contain evidence about its target? It runs after
+`engineering/compute.py` and uses the feature frame produced by the pipeline:
+one row per symbol and timestamp, with feature and target columns.
 
-Three kinds of evidence, in increasing strictness:
+It provides three kinds of evidence, from simple association to more careful
+checks:
 
 1. Association. The information coefficient (IC) is the correlation between
-   the feature now and the target later. `ic.py` computes it per symbol
-   through time (time-series IC), per timestamp across symbols
-   (cross-sectional IC, only meaningful for wide universes), and over trailing
-   windows (rolling IC, the stability view).
-2. Inference. Forward targets computed every bar overlap, so consecutive
-   errors are serially correlated; symbols also move together, so pooled rows
-   are not independent. `regression.py` runs the regression with
-   Driscoll-Kraay standard errors: scores are summed within each timestamp
-   (handling cross-symbol correlation), then a Newey-West kernel over
-   timestamps handles serial correlation, with a lag rule that always covers
-   the target's mechanical overlap. With one symbol this reduces exactly to
-   classic Newey-West.
-3. Shape. A single correlation can hide a relationship that exists only in the
-   extremes. `quantiles.py` buckets the feature into per-symbol quantiles and
-   summarizes the target inside each bucket.
+   the feature now and the target later. `ic.py` computes it per symbol through
+   time (time-series IC), per timestamp across symbols (cross-sectional IC,
+   only meaningful for wide universes), and over trailing windows (rolling IC,
+   the stability view).
+2. Inference. Forward targets computed every bar overlap, so nearby errors are
+   serially correlated. Symbols also move together, so pooled rows are not
+   independent. `regression.py` runs the regression with Driscoll-Kraay
+   standard errors: scores are summed within each timestamp (handling
+   cross-symbol correlation), then a Newey-West kernel over timestamps handles
+   serial correlation. Its lag rule always covers the target's mechanical
+   overlap. With one symbol this reduces exactly to classic Newey-West.
+3. Shape. One correlation can hide a relationship that appears only at the
+   extremes. `quantiles.py` places the feature into per-symbol quantiles and
+   summarizes the target in each bucket.
 
 `summary.py` runs all three checks for many features and returns one ranked
-table. `plots.py` shows the same evidence: a violin plot for each feature
+table. `plots.py` shows the same evidence with a violin plot for each feature
 quantile, a state chart with mean, middle-half, and 10th-to-90th ranges, and
 stacked rolling-IC stability panels.
 

@@ -3,7 +3,7 @@
 ## Purpose
 
 This project computes categorized stock OHLCV features for quantitative
-research and evaluates them against targets.
+research, then evaluates those features against targets.
 
 OHLCV means open, high, low, close, and volume. The build workflow is:
 
@@ -13,7 +13,7 @@ validate config -> load data -> clean invalid rows -> compute categorized featur
 
 ## Architecture
 
-The implementation has two major parts plus a thin workflow boundary:
+The implementation has two main parts and a small command-line workflow:
 
 | Package | Responsibility |
 |---|---|
@@ -22,9 +22,10 @@ The implementation has two major parts plus a thin workflow boundary:
 | `feature_engineering.evaluation/` | Test features: information coefficients, Newey-West regression, quantile analysis, and plots. |
 | `feature_engineering.config` / `feature_engineering.cli` | Config validation and the command-line workflow. |
 
-The workflow stages do not contain feature math. Feature functions do not load
-or save files. Evaluation consumes the finished feature frame and never
-computes features. These boundaries make each stage easy to inspect and test.
+The workflow stages do not contain feature formulas. Feature functions do not
+load or save files. Evaluation uses the finished feature frame and does not
+compute features. Keeping these jobs separate makes each stage easier to test
+and inspect.
 
 ## Feature Categories
 
@@ -36,19 +37,26 @@ computes features. These boundaries make each stage easy to inspect and test.
 | `volatility` | Size and instability of price movement. | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range` |
 | `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap` |
 
-The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The volatility target `next_n_bar_realized_volatility` is the sample standard deviation of the next `bars` one-bar log returns, so models can predict instability instead of direction. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
+The `target` category should usually be excluded from live feature sets because
+it uses future information. The forward target `next_n_bar_return` is a simple
+return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The
+volatility target `next_n_bar_realized_volatility` is the sample standard
+deviation of the next `bars` one-bar log returns, so models can predict
+instability instead of direction. For intraday bars, enable
+`features.reset_by_session` so the forward shift and rolling windows do not
+cross the overnight gap.
 
 ## User Control
 
-Everything a user changes lives in `config.toml`, not in Python:
+Users change the run in `config.toml`, not in Python:
 
 - which feature functions run (`[[features.parameters]]` blocks, `enabled`),
 - what each output column is called (`name`),
 - each feature's parameters (`window`, `bars`, `fast`/`slow`/`signal`, ...),
 - category filters (`include_categories` / `exclude_categories`).
 
-The same function can appear several times under different names with
-different parameters.
+The same function can appear more than once with different names and
+parameters.
 
 ## Inputs
 
@@ -57,11 +65,11 @@ The pipeline accepts either:
 - ClickHouse stock OHLCV data from `firstrate.stocks`, or
 - a local CSV with columns `symbol`, `timestamp`, `open`, `high`, `low`, `close`, and `volume`.
 
-The parsed TOML configuration is validated before data loading. The validator catches
-unsupported data sources, bad output formats, unknown feature functions,
-duplicate enabled output feature names, unknown category filters, category
-filter overlap, and non-positive integer parameters such as `window`, `periods`,
-and `bars`.
+The parsed TOML configuration is validated before data loading. The validator
+catches unsupported data sources, bad output formats, unknown feature
+functions, duplicate enabled output feature names, unknown category filters,
+category filter overlap, and non-positive integer parameters such as `window`,
+`periods`, and `bars`.
 
 ## Outputs
 

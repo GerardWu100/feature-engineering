@@ -1,34 +1,33 @@
 # Feature Engineering
 
 Computes categorized stock features from OHLCV (open, high, low, close,
-volume) market data and evaluates them against targets.
+volume) market data, then evaluates those features against targets.
 
 ## What it does
 
-The package has two major parts:
+The package has two parts:
 
-1. **Feature engineering** (`feature_engineering.engineering`) - build feature
+1. **Feature engineering** (`feature_engineering.engineering`) - builds feature
    datasets: `load data -> clean invalid rows -> compute features -> store files`.
-2. **Feature evaluation** (`feature_engineering.evaluation`) - test the stored
+2. **Feature evaluation** (`feature_engineering.evaluation`) - tests stored
    features against forward-looking targets.
 
 - Loads OHLCV bars from ClickHouse (`firstrate.stocks`) or a local CSV file.
-- Validates `config.toml` before loading data, so bad feature names, category
-  filters, output formats, or windows fail with a clear message instead of a
-  silent bad run.
+- Checks `config.toml` before loading data, so invalid feature names, category
+  filters, output formats, and windows fail with a clear message.
 - Drops impossible rows: missing values, non-positive prices, `high < low`,
-  open/close outside the low-high range.
+  and open/close values outside the low-high range.
 - Computes features by category: `returns`, `trend` (moving average, rate of
   change, RSI, MACD), `volatility` (rolling standard deviation, bar range,
   ATR), `volume` (relative volume, dollar volume, VWAP), and `target`
-  (forward-looking labels for supervised learning). Every feature column's
-  name and parameters come from `config.toml`, so users rename features and
-  change windows without touching Python.
-- Stores Parquet and/or CSV, plus a `feature_catalog.csv` describing every
-  feature and a `run_summary` JSON for reproducibility. `load_features` pulls
+  (forward-looking labels for supervised learning). Feature names and
+  parameters come from `config.toml`, so users can change them without editing
+  Python.
+- Stores Parquet and/or CSV, plus a `feature_catalog.csv` describing each
+  feature and a `run_summary` JSON for reproducibility. `load_features` reads
   a stored run back into a DataFrame.
-- Evaluates features against targets (information coefficients, Newey-West
-  regression, quantile spread, and plots) — see `feature_engineering.evaluation`.
+- Evaluates features against targets with information coefficients, Newey-West
+  regression, quantile spreads, and plots. See `feature_engineering.evaluation`.
 
 Architecture and data-flow details live in `GUIDE_ROOT.md` and
 `PROJECT_OVERVIEW.md`. Assumptions about adjusted prices, timezone handling,
@@ -75,7 +74,7 @@ individual evaluation functions).
 
 ## Configuration
 
-`config.toml` is the single control surface:
+`config.toml` is the single configuration file:
 
 - `[run]`: `source` (`clickhouse` or `csv`), `symbols`, `start_date`,
   `end_date`, `session` (`regular`, `extended`, `full`), `exchange_timezone`,
@@ -87,13 +86,13 @@ individual evaluation functions).
 - `[[features.parameters]]`: one block per feature, naming its `function` and
   parameters (for example `window`, `bars`, `fast`/`slow`/`signal`).
 
-To add a feature: write the function in the matching category file under
+To add a feature, write the function in the matching category file under
 `src/feature_engineering/engineering/features/`, decorate it with
 `@register(...)`, and add a `[[features.parameters]]` entry.
 
-To rename a feature column or change its parameters: edit its
+To rename a feature column or change its parameters, edit its
 `[[features.parameters]]` block. `name` is the output column name; the other
-keys (`window`, `bars`, `fast`/`slow`/`signal`, ...) are the parameters.
+keys (`window`, `bars`, `fast`/`slow`/`signal`, ...) set the feature parameters.
 
 ## Layout
 

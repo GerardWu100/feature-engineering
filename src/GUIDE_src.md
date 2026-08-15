@@ -2,7 +2,7 @@
 
 ## Part 1 - Conceptual Explanation
 
-`src/` is the import root for the project. It contains the project package:
+`src/` is the project's import root. It contains the project package:
 
 ```text
 src/
@@ -14,10 +14,10 @@ src/
     └── cli.py
 ```
 
-`feature_engineering/` is the named import boundary that keeps this project's
-modules separate from generic packages named `features` or `evaluation`.
+`feature_engineering/` is the named package that keeps this project's modules
+separate from generic packages named `features` or `evaluation`.
 
-The split is deliberately simple:
+The split is simple:
 
 ```text
 feature_engineering.engineering = build features: load, clean, compute, store/pull
@@ -27,9 +27,10 @@ feature_engineering.config      = validate config.toml at the boundary
 feature_engineering.cli         = the load -> clean -> compute -> store workflow
 ```
 
-`engineering/features/` owns feature math. Each file is a category: returns,
-targets (forward-looking labels), trend, volatility, or volume. The registry
-imports those category files and exposes the feature menu used by config.
+`engineering/features/` contains the feature formulas. Each file covers one
+category: returns, targets (forward-looking labels), trend, volatility, or
+volume. The registry imports those category files and exposes the feature menu
+used by config.
 
 ## Part 2 - Code Reference
 
@@ -42,7 +43,7 @@ imports those category files and exposes the feature menu used by config.
 | `feature_engineering/config.py` | Config-boundary validation. |
 | `feature_engineering/cli.py` | CLI workflow code. |
 
-Read `feature_engineering/cli.py` first to understand execution, then
+Read `feature_engineering/cli.py` first to follow execution, then
 `feature_engineering/engineering/features/registry.py` to see the available
 features.
 
