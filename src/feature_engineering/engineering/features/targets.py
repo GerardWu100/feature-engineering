@@ -1,8 +1,8 @@
-"""Return and target features for stock OHLCV data.
+"""Target features: forward-looking labels for supervised learning.
 
-OHLCV means open, high, low, close, and volume bar data. Return features measure
-price change through time. Target features are forward-looking labels for model
-training, so they must not be used as live input signals.
+A target answers "what happens after this bar?" so it is computed from future
+rows. Targets must never be used as live input signals; the config excludes
+the ``target`` category from live feature sets by default.
 """
 
 from __future__ import annotations
@@ -10,62 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from feature_engineering.features.registry import as_feature_column, register
-
-
-@register(
-    category="returns",
-    lookback=1,
-    description="Natural-log return from one close to the next.",
-    calculation="ln(close_t / close_{t-1})",
+from feature_engineering.engineering.features.registry import (
+    as_feature_column,
+    register,
 )
-def log_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
-    """Compute one-period log returns from close prices.
-
-    Parameters
-    ----------
-    frame
-        Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
-
-    Returns
-    -------
-    pandas.Series
-        Log returns aligned to ``frame.index``. The first row is ``NaN`` because
-        there is no previous close.
-    """
-    close = frame["close"]
-
-    # Log return is additive through time, which makes it convenient for many
-    # statistical models and for tracing multi-period returns.
-    return as_feature_column(np.log(close / close.shift(1)))
-
-
-@register(
-    category="returns",
-    lookback=1,
-    description="Simple percentage return from one close to the next.",
-    calculation="close_t / close_{t-1} - 1",
-)
-def simple_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
-    """Compute one-period simple returns from close prices.
-
-    Parameters
-    ----------
-    frame
-        Single-symbol OHLCV frame with a ``close`` column, sorted by time.
-    parameters
-        Unused parameter dict, accepted for the shared feature signature.
-
-    Returns
-    -------
-    pandas.Series
-        Simple returns aligned to ``frame.index``. The first row is ``NaN``.
-    """
-    # pct_change expresses one-step simple return directly:
-    # close_t / close_{t-1} - 1.
-    return as_feature_column(frame["close"].pct_change())
 
 
 @register(
@@ -81,7 +29,7 @@ def next_n_bar_return(frame: pd.DataFrame, parameters: dict) -> pd.Series:
     of the input frame: a daily bar on daily data, or a one-minute bar on
     one-minute data. The caller controls the bar size by choosing the source
     data and, for intraday runs, the ``reset_by_session`` option in
-    ``compute_features`` (see ``pipeline/engineer.py``), which prevents the
+    ``compute_features`` (see ``engineering/compute.py``), which prevents the
     forward shift from crossing the overnight gap.
 
     Parameters

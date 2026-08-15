@@ -7,13 +7,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
 
-from feature_engineering.features.registry import REGISTRY
-from feature_engineering.pipeline.constants import (
+from feature_engineering.engineering.features.registry import REGISTRY
+from feature_engineering.engineering.constants import (
     DEFAULT_CLICKHOUSE_TABLE,
     DEFAULT_EXCHANGE_TIMEZONE,
     SQL_IDENTIFIER_PATTERN,
 )
-from feature_engineering.pipeline.load import SESSION_FILTER_SQL
+from feature_engineering.engineering.load import SESSION_FILTER_SQL
 
 ALLOWED_DATA_SOURCES = {"clickhouse", "csv"}
 ALLOWED_OUTPUT_FORMATS = {"csv", "parquet"}

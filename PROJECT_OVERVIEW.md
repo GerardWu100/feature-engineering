@@ -1,30 +1,30 @@
-# Project Overview - Simple Feature Engineering
+# Project Overview - Feature Engineering and Evaluation
 
 ## Purpose
 
-This project computes categorized stock OHLCV features for quantitative research.
+This project computes categorized stock OHLCV features for quantitative
+research and evaluates them against targets.
 
-OHLCV means open, high, low, close, and volume. The code follows one small workflow:
+OHLCV means open, high, low, close, and volume. The build workflow is:
 
 ```text
-validate config -> load data -> clean invalid rows -> compute categorized features -> export files
+validate config -> load data -> clean invalid rows -> compute categorized features -> store files
 ```
 
 ## Architecture
 
-The implementation has one project package with four subpackages:
+The implementation has two major parts plus a thin workflow boundary:
 
 | Package | Responsibility |
 |---|---|
-| `feature_engineering.features/` | Feature formulas grouped by research category. |
-| `feature_engineering.engine/` | Cached batch `FeatureEngine` and constant-time `OnlineFeatureEngine`. |
-| `feature_engineering.pipeline/` | Config validation, data loading, cleaning, feature application, and export. |
-| `feature_engineering.evaluation/` | Feature-versus-target testing: information coefficients, Newey-West regression, quantile analysis, and plots. |
+| `feature_engineering.engineering/` | Build features: data loading, cleaning, feature computation, and storing/pulling datasets. |
+| `feature_engineering.engineering.features/` | Feature formulas grouped by research category. |
+| `feature_engineering.evaluation/` | Test features: information coefficients, Newey-West regression, quantile analysis, and plots. |
+| `feature_engineering.config` / `feature_engineering.cli` | Config validation and the command-line workflow. |
 
-The pipeline does not contain feature math. Feature functions do not load or
-save files. The engines run registered features but do not reimplement their
-formulas. Evaluation consumes the finished feature frame and never computes
-features. These boundaries make each stage easy to inspect and test.
+The workflow stages do not contain feature math. Feature functions do not load
+or save files. Evaluation consumes the finished feature frame and never
+computes features. These boundaries make each stage easy to inspect and test.
 
 ## Feature Categories
 
@@ -38,21 +38,17 @@ features. These boundaries make each stage easy to inspect and test.
 
 The `target` category should usually be excluded from live feature sets because it uses future information. The forward target `next_n_bar_return` is a simple return over a fixed number of bars: `close[t+bars] / close[t] - 1`. The volatility target `next_n_bar_realized_volatility` is the sample standard deviation of the next `bars` one-bar log returns, so models can predict instability instead of direction. For intraday bars, enable `features.reset_by_session` so the forward shift and rolling windows do not cross the overnight gap.
 
-## Feature Engines
+## User Control
 
-Two engines run registered features for two usage patterns. Neither contains
-feature math; both delegate to the formulas in `features/`.
+Everything a user changes lives in `config.toml`, not in Python:
 
-| Engine | Use case | Per-update cost |
-|---|---|---|
-| `FeatureEngine` | Research / backtest. Resolve the config once, then `transform(frame) -> frame` repeatedly. | Vectorized recompute over the frame. |
-| `OnlineFeatureEngine` | Live trading. `update(bar) -> {feature: value}` one bar at a time. | Constant-time work per bar. |
+- which feature functions run (`[[features.parameters]]` blocks, `enabled`),
+- what each output column is called (`name`),
+- each feature's parameters (`window`, `bars`, `fast`/`slow`/`signal`, ...),
+- category filters (`include_categories` / `exclude_categories`).
 
-The batch feature functions are the source of truth for the formulas. The
-online accumulators are a second implementation tuned for speed;
-`tests/test_engines.py` holds them to the batch values with an equivalence test.
-`OnlineFeatureEngine` rejects forward-looking `target` features because they
-need future bars.
+The same function can appear several times under different names with
+different parameters.
 
 ## Inputs
 
@@ -77,6 +73,9 @@ Outputs are written to `output_dir` from `config.toml`:
 | `features_v{version}_{timestamp_with_microseconds}.csv` | Inspection-friendly feature dataset. |
 | `feature_catalog.csv` | Feature names, categories, formulas, and descriptions. |
 | `run_summary_v{version}_{timestamp}.json` | Run timestamp, full config snapshot, rows per symbol, per-feature health (nulls and ranges), and written paths. |
+
+`load_features(output_dir)` pulls the newest stored dataset back into a
+DataFrame; pass `run_stem` to pick a specific run.
 
 ## Important Assumptions
 

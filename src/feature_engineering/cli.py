@@ -11,18 +11,18 @@ from typing import Any
 
 import tomllib
 
-from feature_engineering.pipeline.clean import clean_ohlcv
-from feature_engineering.pipeline.config import validate_config
-from feature_engineering.pipeline.engineer import compute_features
-from feature_engineering.pipeline.export import export_features
-from feature_engineering.pipeline.load import load_ohlcv
+from feature_engineering.config import validate_config
+from feature_engineering.engineering.clean import clean_ohlcv
+from feature_engineering.engineering.compute import compute_features
+from feature_engineering.engineering.load import load_ohlcv
+from feature_engineering.engineering.store import save_features
 
 
 def main() -> None:
-    """Run the simple load-clean-engineer-export workflow from a TOML config."""
+    """Run the load-clean-compute-store workflow from a TOML config."""
     parser = argparse.ArgumentParser(
         prog="run.py",
-        description="Simple stock feature engineering: load -> clean -> engineer -> export.",
+        description="Stock feature engineering: load -> clean -> compute -> store.",
     )
     parser.add_argument(
         "--config",
@@ -90,8 +90,8 @@ def run_pipeline(config: dict[str, Any]) -> dict[str, Path]:
     log.info("Computing configured features")
     featured = compute_features(cleaned, config)
 
-    log.info("Exporting %d rows", len(featured))
-    paths = export_features(featured, config)
+    log.info("Storing %d rows", len(featured))
+    paths = save_features(featured, config)
 
     log.info("Quality report: %s", json.dumps(quality_report, sort_keys=True))
     for label, path in paths.items():

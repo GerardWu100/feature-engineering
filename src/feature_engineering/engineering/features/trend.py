@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from feature_engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import as_feature_column, register
 
 # Keep defaults next to the batch definitions. The online engine imports the
 # same values, so an omitted configuration parameter has one meaning everywhere.
@@ -124,9 +124,7 @@ def _ema(values: pd.Series, span: int) -> pd.Series:
 
         ema_t = ema_{t-1} + alpha * (x_t - ema_{t-1}),  alpha = 2 / (span + 1)
 
-    The first ``span - 1`` rows are ``NaN`` (``min_periods=span``). This is the
-    exact recurrence the online accumulator in ``engine/online.py`` reproduces,
-    so batch and streaming outputs match.
+    The first ``span - 1`` rows are ``NaN`` (``min_periods=span``).
 
     Parameters
     ----------

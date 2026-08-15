@@ -7,47 +7,49 @@
 ```text
 src/
 └── feature_engineering/
-    ├── features/
-    ├── engine/
-    ├── pipeline/
-    └── evaluation/
+    ├── engineering/
+    │   └── features/
+    ├── evaluation/
+    ├── config.py
+    └── cli.py
 ```
 
 `feature_engineering/` is the named import boundary that keeps this project's
-modules separate from generic packages named `features` or `pipeline`.
-
-`feature_engineering/features/` owns feature math. Each file is a category: returns, trend, volatility, or volume. The registry imports those category files and exposes the feature menu used by config.
-
-`feature_engineering/pipeline/` owns the workflow. It validates config, loads OHLCV data, cleans invalid rows, computes configured feature columns per symbol, and exports the result.
-
-`feature_engineering/evaluation/` owns feature testing after computation:
-information coefficients, Newey-West regression, quantile analysis, and plots.
+modules separate from generic packages named `features` or `evaluation`.
 
 The split is deliberately simple:
 
 ```text
-feature_engineering.pipeline   = config validation, data movement, and orchestration
-feature_engineering.features   = quantitative formulas
-feature_engineering.engine     = batch and online execution of registered features
-feature_engineering.evaluation = does a computed feature predict its target?
+feature_engineering.engineering = build features: load, clean, compute, store/pull
+feature_engineering.engineering.features = the quantitative formulas by category
+feature_engineering.evaluation  = does a computed feature predict its target?
+feature_engineering.config      = validate config.toml at the boundary
+feature_engineering.cli         = the load -> clean -> compute -> store workflow
 ```
+
+`engineering/features/` owns feature math. Each file is a category: returns,
+targets (forward-looking labels), trend, volatility, or volume. The registry
+imports those category files and exposes the feature menu used by config.
 
 ## Part 2 - Code Reference
 
 | Path | Purpose |
 |---|---|
 | `feature_engineering/` | Package containing the project implementation. |
-| `feature_engineering/features/` | Categorized stock feature functions and registry. |
-| `feature_engineering/engine/` | Cached batch `FeatureEngine` and incremental `OnlineFeatureEngine`. |
-| `feature_engineering/pipeline/` | Config validation, load, clean, engineer, export, and CLI workflow code. |
+| `feature_engineering/engineering/` | Load, clean, compute, and store/pull feature datasets. |
+| `feature_engineering/engineering/features/` | Categorized stock feature functions and registry. |
 | `feature_engineering/evaluation/` | Feature-versus-target testing: information coefficients, Newey-West regression, quantiles, and plots. |
+| `feature_engineering/config.py` | Config-boundary validation. |
+| `feature_engineering/cli.py` | CLI workflow code. |
 
-Read `feature_engineering/pipeline/cli.py` first to understand execution, then `feature_engineering/features/registry.py` to see the available features.
+Read `feature_engineering/cli.py` first to understand execution, then
+`feature_engineering/engineering/features/registry.py` to see the available
+features.
 
 ## Part 3 - Short Journal
 
 - 2026-04-24: Replaced the old multi-subsystem package layout with two packages: `features` and `pipeline`.
-- 2026-04-26: Wrapped `features` and `pipeline` in the `feature_engineering` package to reduce generic import-name collisions.
-- 2026-05-14: Added `pipeline/config.py` so config-boundary validation is separate from stage logic.
-- 2026-06-23: Added the `feature_engineering/engine/` subpackage (batch + online feature engines) for in-memory research and live-streaming use.
+- 2026-04-26: Wrapped the implementation in the `feature_engineering` package to reduce generic import-name collisions.
+- 2026-05-14: Added a dedicated config module so config-boundary validation is separate from stage logic.
 - 2026-08-10: Added the `feature_engineering/evaluation/` subpackage for testing features against targets (IC, Newey-West regression, quantiles, plots).
+- 2026-08-15: Restructured into two major parts, `engineering/` and `evaluation/`, and removed the unused `engine/` subpackage.

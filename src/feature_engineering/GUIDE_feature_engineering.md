@@ -3,44 +3,52 @@
 ## Part 1 - Conceptual Explanation
 
 `feature_engineering/` is the project package. It prevents this code from
-exposing generic top-level import names such as `features` and `pipeline`.
+exposing generic top-level import names such as `features` or `evaluation`.
 
-The package has four responsibilities below it:
+The package has two major parts plus a thin workflow boundary:
 
 ```text
 feature_engineering/
-├── features/
-├── engine/
-├── pipeline/
-└── evaluation/
+├── engineering/    # Part 1: build features
+│   └── features/   # the feature formulas, one file per category
+├── evaluation/     # Part 2: test features against targets
+├── config.py       # validate config.toml before anything runs
+└── cli.py          # load -> clean -> compute -> store workflow
 ```
 
-`features/` contains quantitative formulas. `pipeline/` contains the workflow
-boundary and data movement: validate configuration, load OHLCV data, clean
-invalid rows, compute configured formulas, and write outputs. `engine/` provides
-two ways to run registered features: a cached batch `FeatureEngine` for
-research and a constant-time `OnlineFeatureEngine` for live, bar-by-bar use.
+`engineering/` builds feature datasets: load OHLCV bars, clean invalid rows,
+compute the configured feature columns per symbol, and store the result on
+disk (with a matching pull-back call to read a stored run again).
+`engineering/features/` holds the quantitative formulas, grouped by category:
+returns, targets (forward-looking labels), trend, volatility, and volume.
+
 `evaluation/` tests whether computed features predict their targets with
 information coefficients, Newey-West regression, quantile analysis, a one-call
 summary table, and plots.
 
-This boundary matters when the project is installed or used from notebooks. Python searches import locations in order. A generic import such as `features` can accidentally resolve to another package or local folder. An import such as `feature_engineering.features` points back to this project.
+This boundary matters when the project is installed or used from notebooks.
+Python searches import locations in order. A generic import such as `features`
+can accidentally resolve to another package or local folder. An import such as
+`feature_engineering.engineering.features` points back to this project.
 
 ## Part 2 - Code Reference
 
 | Path | Purpose |
 |---|---|
 | `__init__.py` | Defines the public package exports. |
-| `features/` | Feature formulas and registry metadata. |
-| `engine/` | Cached batch `FeatureEngine` and incremental `OnlineFeatureEngine`. |
-| `pipeline/` | CLI workflow, config validation, loading, cleaning, feature computation, and export. |
+| `engineering/` | Load, clean, compute, and store/pull feature datasets. |
+| `engineering/features/` | Feature formulas and registry metadata. |
 | `evaluation/` | Feature-versus-target testing: IC, Newey-West regression, quantiles, summary table, plots. |
+| `config.py` | Config validation (`validate_config`) at the workflow boundary. |
+| `cli.py` | CLI entry point (`main`, `run_pipeline`, `load_config`). |
 
-Start with `pipeline/cli.py` for execution flow, then read `features/registry.py` to see how configured feature names resolve to formulas. Read `engine/` for the in-memory research and live-streaming entry points, and `evaluation/` for feature testing after computation.
+Start with `cli.py` for execution flow, then read
+`engineering/features/registry.py` to see how configured feature names resolve
+to formulas, and `evaluation/` for feature testing after computation.
 
 ## Part 3 - Short Journal
 
 - 2026-04-26: Added the `feature_engineering` package to reduce import-name collisions in installed and notebook workflows.
-- 2026-05-14: Added an explicit config-validation boundary under `pipeline/`.
-- 2026-06-23: Added the `engine/` subpackage so features can be run as a cached batch transform or as constant-time incremental live updates, alongside the file-writing CLI pipeline.
+- 2026-05-14: Added an explicit config-validation boundary.
 - 2026-08-10: Added the `evaluation/` subpackage (IC, Newey-West regression, quantile analysis, plots) and the `next_n_bar_realized_volatility` volatility target.
+- 2026-08-15: Restructured into two major parts: `engineering/` (formerly `features/` + `pipeline/`) and `evaluation/`. Moved forward-looking targets into `features/targets.py`, renamed export to `save_features`, added `load_features` to pull stored datasets back, and removed the unused `engine/` subpackage (batch and online engines).

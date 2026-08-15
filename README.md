@@ -1,15 +1,16 @@
 # Feature Engineering
 
 Computes categorized stock features from OHLCV (open, high, low, close,
-volume) market data, for research and for live feature serving.
+volume) market data and evaluates them against targets.
 
 ## What it does
 
-The pipeline runs one small workflow:
+The package has two major parts:
 
-```text
-load data -> clean invalid rows -> compute categorized features -> export files
-```
+1. **Feature engineering** (`feature_engineering.engineering`) - build feature
+   datasets: `load data -> clean invalid rows -> compute features -> store files`.
+2. **Feature evaluation** (`feature_engineering.evaluation`) - test the stored
+   features against forward-looking targets.
 
 - Loads OHLCV bars from ClickHouse (`firstrate.stocks`) or a local CSV file.
 - Validates `config.toml` before loading data, so bad feature names, category
@@ -20,16 +21,14 @@ load data -> clean invalid rows -> compute categorized features -> export files
 - Computes features by category: `returns`, `trend` (moving average, rate of
   change, RSI, MACD), `volatility` (rolling standard deviation, bar range,
   ATR), `volume` (relative volume, dollar volume, VWAP), and `target`
-  (forward-looking labels for supervised learning).
-- Exports Parquet and/or CSV, plus a `feature_catalog.csv` describing every
-  feature and a `run_summary` JSON for reproducibility.
+  (forward-looking labels for supervised learning). Every feature column's
+  name and parameters come from `config.toml`, so users rename features and
+  change windows without touching Python.
+- Stores Parquet and/or CSV, plus a `feature_catalog.csv` describing every
+  feature and a `run_summary` JSON for reproducibility. `load_features` pulls
+  a stored run back into a DataFrame.
 - Evaluates features against targets (information coefficients, Newey-West
   regression, quantile spread, and plots) — see `feature_engineering.evaluation`.
-
-Two engines share one set of feature formulas: `FeatureEngine` for batch
-research and backtests, `OnlineFeatureEngine` for constant-time, one-bar-at-a-
-time updates in live trading. An equivalence test (`tests/test_engines.py`)
-checks that the online accumulators reproduce the batch formulas.
 
 Architecture and data-flow details live in `GUIDE_ROOT.md` and
 `PROJECT_OVERVIEW.md`. Assumptions about adjusted prices, timezone handling,
@@ -60,17 +59,19 @@ uv run pytest -q                              # run the test suite
 As a library, with no file I/O:
 
 ```python
-from feature_engineering import clean_ohlcv, compute_features, evaluate_features
+from feature_engineering import clean_ohlcv, compute_features, evaluate_features, load_features
 
 cleaned, report = clean_ohlcv(raw_ohlcv_frame)
 features = compute_features(cleaned, config_dict)
 table = evaluate_features(features, "next_20bar_realized_volatility", target_horizon_bars=20)
+
+stored = load_features("outputs/stocks")  # pull the newest stored run back
 ```
 
 `config_dict` is the plain dict shape `config.toml` parses into. See the
 module docstring in `src/feature_engineering/__init__.py` for the full set of
-importable pieces (`FeatureEngine`, `OnlineFeatureEngine`, `validate_config`,
-plots, and the individual evaluation functions).
+importable pieces (`validate_config`, `save_features`, plots, and the
+individual evaluation functions).
 
 ## Configuration
 
@@ -86,20 +87,26 @@ plots, and the individual evaluation functions).
 - `[[features.parameters]]`: one block per feature, naming its `function` and
   parameters (for example `window`, `bars`, `fast`/`slow`/`signal`).
 
-To add a feature: write the function in the matching file under
-`src/feature_engineering/features/`, decorate it with `@register(...)`, and
-add a `[[features.parameters]]` entry.
+To add a feature: write the function in the matching category file under
+`src/feature_engineering/engineering/features/`, decorate it with
+`@register(...)`, and add a `[[features.parameters]]` entry.
+
+To rename a feature column or change its parameters: edit its
+`[[features.parameters]]` block. `name` is the output column name; the other
+keys (`window`, `bars`, `fast`/`slow`/`signal`, ...) are the parameters.
 
 ## Layout
 
 ```text
-run.py            entry point, delegates to feature_engineering.pipeline.cli
+run.py            entry point, delegates to feature_engineering.cli
 config.toml       single run configuration
 src/feature_engineering/
-  features/       feature formulas by category
-  engine/         FeatureEngine (batch), OnlineFeatureEngine (live)
-  pipeline/       config validation, load, clean, engineer, export, CLI
+  engineering/    load, clean, compute, store/pull feature datasets
+    features/     feature formulas by category (returns, targets, trend,
+                  volatility, volume)
   evaluation/     feature-versus-target testing and plots
+  config.py       config validation
+  cli.py          the load -> clean -> compute -> store workflow
 tests/            pytest suite, including a toy CSV fixture
 ```
 

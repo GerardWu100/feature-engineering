@@ -1,4 +1,9 @@
-"""Export engineered features and a compact feature catalog."""
+"""Store engineered feature datasets on disk and pull them back.
+
+``save_features`` writes the dataset, a feature catalog, and a run summary.
+``load_features`` reads a stored dataset back into a DataFrame, defaulting to
+the newest run in the output directory.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +14,12 @@ from typing import Any
 
 import pandas as pd
 
-from feature_engineering.features.registry import REGISTRY
-from feature_engineering.pipeline.constants import IDENTIFIER_COLUMN_SET
-from feature_engineering.pipeline.engineer import selected_feature_configs
+from feature_engineering.engineering.features.registry import REGISTRY
+from feature_engineering.engineering.constants import IDENTIFIER_COLUMN_SET
+from feature_engineering.engineering.compute import selected_feature_configs
 
 
-def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Path]:
+def save_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Path]:
     """Write feature outputs requested by config.
 
     Parameters
@@ -63,6 +68,61 @@ def export_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Pa
     paths["summary_json"] = summary_path
 
     return paths
+
+
+def load_features(
+    output_dir: str | Path,
+    *,
+    run_stem: str | None = None,
+    file_format: str = "parquet",
+) -> pd.DataFrame:
+    """Pull a stored feature dataset back from disk.
+
+    Parameters
+    ----------
+    output_dir
+        Directory that ``save_features`` wrote to, for example
+        ``outputs/stocks``.
+    run_stem
+        Filename stem of one specific run, for example
+        ``features_v1.0.0_20260815_120000_000000``. When omitted, the newest
+        run is loaded. Newest is decided by the timestamp embedded in the
+        filename, which sorts correctly as text.
+    file_format
+        ``"parquet"`` (default) or ``"csv"``. Must match a format the run was
+        saved with.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The stored feature dataset: identifier columns plus feature columns.
+        CSV loads parse the ``timestamp`` column back to datetimes so both
+        formats return the same dtypes.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the directory holds no matching feature file.
+    ValueError
+        If ``file_format`` is not supported.
+    """
+    if file_format not in {"parquet", "csv"}:
+        raise ValueError("file_format must be 'parquet' or 'csv'.")
+
+    directory = Path(output_dir)
+    pattern = f"{run_stem or 'features_v*'}.{file_format}"
+    candidates = sorted(directory.glob(pattern))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No feature file matching '{pattern}' in {directory}."
+        )
+
+    # The filename stem ends with a zero-padded UTC timestamp, so the largest
+    # sorted name is the most recent run.
+    path = candidates[-1]
+    if file_format == "parquet":
+        return pd.read_parquet(path)
+    return pd.read_csv(path, parse_dates=["timestamp"])
 
 
 def build_feature_catalog(frame: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from feature_engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import as_feature_column, register
 
 
 @register(
@@ -102,7 +102,7 @@ def _vwap_series(frame: pd.DataFrame) -> pd.Series:
         vwap_t = sum(typical_price * volume)[0..t] / sum(volume)[0..t]
 
     Because features are computed per group, VWAP resets at each group boundary.
-    With ``reset_by_session = true`` (see ``pipeline/engineer.py``) each group is
+    With ``reset_by_session = true`` (see ``engineering/compute.py``) each group is
     one symbol-day, which is the standard intraday "session VWAP". Without a
     session reset on intraday data, VWAP accumulates across days, which is rarely
     what you want.

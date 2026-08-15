@@ -1,0 +1,47 @@
+# GUIDE - engineering/
+
+## Part 1 - Conceptual Explanation
+
+`engineering/` is the feature-building half of the package. It turns raw OHLCV
+bars into a stored feature dataset in four stages:
+
+```text
+load -> clean -> compute -> store
+```
+
+Load reads bars from a CSV file or the ClickHouse database, filters by symbol,
+date range, and trading session, and standardizes the schema to
+`symbol, timestamp, open, high, low, close, volume`. Clean drops invalid rows
+using the config's data-quality rules. Compute applies every enabled feature
+from `features/` per symbol (and per session day when `reset_by_session` is
+on), so rolling windows never mix tickers or cross the overnight gap. Store
+writes the dataset, a feature catalog, and a run summary to the output
+directory, and can pull a stored run back into memory.
+
+Users control everything from `config.toml`: which symbols and dates to load,
+which features to compute, what each feature column is named, and each
+feature's parameters. The same feature function can appear many times under
+different names with different parameters (for example a 20-bar and a 50-bar
+moving average).
+
+Each stage is a plain function over pandas DataFrames, so research code can
+import any stage directly and skip the file-writing workflow.
+
+## Part 2 - Code Reference
+
+| File | Purpose |
+|---|---|
+| `load.py` | `load_ohlcv`: CSV/ClickHouse loading, session and date filtering, timezone handling. |
+| `clean.py` | `clean_ohlcv`: config-driven row-level data-quality rules plus a drop report. |
+| `compute.py` | `compute_features`: resolve configured features against the registry and compute them per symbol. |
+| `store.py` | `save_features` (dataset + catalog + run summary), `load_features` (pull a stored run back), `build_feature_catalog`. |
+| `constants.py` | Shared column names, defaults, and the canonical `sort_by_symbol_and_time` ordering contract. |
+| `features/` | The feature formulas by category; see `features/GUIDE_features.md`. |
+
+`compute.py` exposes `selected_feature_configs` and `resolve_feature` for code
+that needs the active feature list without computing anything (the catalog in
+`store.py` uses this).
+
+## Part 3 - Short Journal
+
+- 2026-08-15: Created `engineering/` from the former `pipeline/` and `features/` subpackages so the package has two clear parts: build features here, test them in `evaluation/`. Renamed `engineer.py` to `compute.py` and `export.py` to `store.py`, and added `load_features` so stored runs can be pulled back without re-running the pipeline.

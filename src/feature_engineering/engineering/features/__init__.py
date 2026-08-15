@@ -1,6 +1,6 @@
 """Categorized stock feature functions for the simple pipeline."""
 
-from feature_engineering.features.registry import (
+from feature_engineering.engineering.features.registry import (
     REGISTRY,
     FeatureSpec,
     as_feature_column,

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from feature_engineering.pipeline.load import load_ohlcv
+from feature_engineering.engineering.load import load_ohlcv
 
 
 def _write_csv(tmp_path: Path, rows: list[str]) -> Path:

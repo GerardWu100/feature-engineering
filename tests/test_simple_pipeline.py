@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from feature_engineering.pipeline.clean import clean_ohlcv
-from feature_engineering.pipeline.engineer import compute_features
-from feature_engineering.pipeline.export import export_features
-from feature_engineering.pipeline.load import load_ohlcv
+from feature_engineering.engineering.clean import clean_ohlcv
+from feature_engineering.engineering.compute import compute_features
+from feature_engineering.engineering.store import load_features, save_features
+from feature_engineering.engineering.load import load_ohlcv
 
 
 def _raw_frame() -> pd.DataFrame:
@@ -204,8 +204,8 @@ def test_compute_features_reset_by_session_does_not_cross_day_boundary() -> None
     assert reset.loc[3, "ma_2"] == 202.0
 
 
-def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
-    """Export should write feature data plus a small readable catalog."""
+def test_save_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
+    """Saving should write feature data plus a small readable catalog."""
     featured = pd.DataFrame(
         {
             "symbol": ["AAPL"],
@@ -226,7 +226,7 @@ def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
         },
     }
 
-    paths = export_features(featured, config)
+    paths = save_features(featured, config)
 
     assert paths["csv"].exists()
     assert paths["parquet"].exists()
@@ -245,3 +245,37 @@ def test_export_features_writes_dataset_and_catalog(tmp_path: Path) -> None:
     # Feature health: per-feature null counts and value range are present.
     assert summary["feature_health"]["log_return"]["null_count"] == 0
     assert math.isclose(summary["feature_health"]["log_return"]["max"], 0.01)
+
+
+def test_load_features_pulls_back_the_newest_saved_run(tmp_path: Path) -> None:
+    """load_features should round-trip the dataset save_features wrote."""
+    featured = pd.DataFrame(
+        {
+            "symbol": ["AAPL", "AAPL"],
+            "timestamp": pd.to_datetime(
+                ["2024-01-02 09:30:00", "2024-01-02 09:31:00"]
+            ),
+            "log_return": [0.01, -0.02],
+        }
+    )
+    config = {
+        "run": {
+            "output_dir": str(tmp_path),
+            "output_formats": ["csv", "parquet"],
+            "version": "test",
+        },
+        "features": {
+            "parameters": [
+                {"name": "log_return", "function": "log_return", "enabled": True},
+            ]
+        },
+    }
+    save_features(featured, config)
+
+    # Both formats should round-trip to the same rows, columns, and dtypes.
+    for file_format in ("parquet", "csv"):
+        pulled = load_features(tmp_path, file_format=file_format)
+        pd.testing.assert_frame_equal(pulled, featured)
+
+    with pytest.raises(FileNotFoundError):
+        load_features(tmp_path / "empty_dir")

@@ -86,10 +86,11 @@ def register(
 
 
 _FEATURE_MODULES = (
-    "feature_engineering.features.returns",
-    "feature_engineering.features.trend",
-    "feature_engineering.features.volatility",
-    "feature_engineering.features.volume",
+    "feature_engineering.engineering.features.returns",
+    "feature_engineering.engineering.features.targets",
+    "feature_engineering.engineering.features.trend",
+    "feature_engineering.engineering.features.volatility",
+    "feature_engineering.engineering.features.volume",
 )
 
 for module_path in _FEATURE_MODULES:

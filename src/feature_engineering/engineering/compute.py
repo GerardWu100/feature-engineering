@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from feature_engineering.features.registry import REGISTRY, FeatureSpec
-from feature_engineering.pipeline.constants import (
+from feature_engineering.engineering.features.registry import REGISTRY, FeatureSpec
+from feature_engineering.engineering.constants import (
     IDENTIFIER_COLUMNS,
     sort_by_symbol_and_time,
 )
@@ -63,9 +63,8 @@ def apply_resolved_features(
 ) -> pd.DataFrame:
     """Compute already-resolved feature columns on a pre-sorted frame.
 
-    This is the shared core used by both the one-shot :func:`compute_features`
-    and the cached ``FeatureEngine`` wrapper. Splitting it out lets the engine
-    resolve specs once in its constructor and reuse them on every ``transform``.
+    This is the core of :func:`compute_features`, split out so callers that
+    resolve specs once can reuse them across repeated calls.
 
     Parameters
     ----------

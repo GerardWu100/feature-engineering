@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from feature_engineering.pipeline.config import ConfigValidationError, validate_config
+from feature_engineering.config import ConfigValidationError, validate_config
 
 
 def _valid_csv_config() -> dict:

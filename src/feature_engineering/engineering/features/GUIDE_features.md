@@ -7,17 +7,18 @@ one symbol's time-sorted data and returns a pandas `Series` with the same index.
 
 Files are organized by category:
 
-| File | Category | Meaning |
-|---|---|---|
-| `returns.py` | `returns`, `target` | Price changes and forward-looking labels. |
-| `trend.py` | `trend` | Direction and momentum. |
-| `volatility.py` | `volatility` | Size and instability of price movement. |
-| `volume.py` | `volume` | Trading activity and liquidity context. |
-| `registry.py` | feature menu | Maps config function names to real functions and metadata. |
+| File | Category | Input columns | Meaning |
+|---|---|---|---|
+| `returns.py` | `returns` | close | Backward-looking price changes. |
+| `targets.py` | `target` | close (future rows) | Forward-looking labels for supervised learning. |
+| `trend.py` | `trend` | close | Direction and momentum. |
+| `volatility.py` | `volatility` | full candle (open, high, low, close) | Size and instability of price movement. |
+| `volume.py` | `volume` | candle + volume | Trading activity and liquidity context. |
+| `registry.py` | feature menu | - | Maps config function names to real functions and metadata. |
 
 The `target` category is special: a target is the value a model tries to
-predict. `next_n_bar_return` is stored in `returns.py` because its formula is a
-return, but its category is `target` because it looks into the future.
+predict. Targets live in their own file, `targets.py`, because they look into
+the future and must never be used as live input signals.
 
 `next_n_bar_return` is a forward simple return over a fixed number of bars (rows), not calendar days:
 
@@ -25,7 +26,7 @@ $$
 \text{target}_t = \frac{C_{t+n}}{C_t} - 1
 $$
 
-Here $C_t$ is the close at the current row and $n$ is the configured horizon in bars (`bars`). A bar is one row of the input: a daily bar on daily data, a one-minute bar on one-minute data. The final $n$ rows are `NaN` because their future close is unavailable. For intraday data, enable `reset_by_session` (see `pipeline/engineer.py`) so the forward shift does not cross the overnight gap.
+Here $C_t$ is the close at the current row and $n$ is the configured horizon in bars (`bars`). A bar is one row of the input: a daily bar on daily data, a one-minute bar on one-minute data. The final $n$ rows are `NaN` because their future close is unavailable. For intraday data, enable `reset_by_session` (see `engineering/compute.py`) so the forward shift does not cross the overnight gap.
 
 `next_n_bar_realized_volatility` is the volatility counterpart: instead of
 direction, it labels how unstable price will be. It is the sample standard
@@ -48,7 +49,8 @@ undefined.
 | File | Key contents |
 |---|---|
 | `registry.py` | `FeatureSpec`, `REGISTRY`, `register`, and `as_feature_column`. |
-| `returns.py` | `log_return`, `simple_return`, `next_n_bar_return`, `next_n_bar_realized_volatility`. |
+| `returns.py` | `log_return`, `simple_return`. |
+| `targets.py` | `next_n_bar_return`, `next_n_bar_realized_volatility`. |
 | `trend.py` | `moving_average`, `price_vs_moving_average`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram`. |
 | `volatility.py` | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range`. |
 | `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap`. |
@@ -65,3 +67,4 @@ Add a new feature by placing it in the matching category file and decorating it 
 - 2026-08-10: Added `next_n_bar_realized_volatility`, a forward realized-volatility target: the sample standard deviation of the next `bars` one-bar log returns, computed as a backward rolling std shifted back by `bars` so each row's window covers exactly the future returns and the final `bars` rows are `NaN`.
 - 2026-08-09: All feature parameter defaults (`DEFAULT_MOVING_AVERAGE_WINDOW`, `DEFAULT_RATE_OF_CHANGE_PERIODS`, Relative Strength Index and Moving Average Convergence/Divergence constants) now live at the top of `trend.py` and are imported by the online engine, so an omitted configuration parameter means the same thing on both paths. `average_true_range` reuses the shared `_wilder_average` helper, and `macd_histogram` computes the convergence/divergence line once and feeds it to the signal helper.
 - 2026-08-10: Renamed every non-standard abbreviation in the user-facing surface so the config and data contract read as plain words: config key `fn` -> `function`, `[[features.params]]` -> `[[features.parameters]]`, column `ts` -> `timestamp` (the ClickHouse column is still `ts` and is aliased in the query), session `rth` -> `regular`, and the feature functions `rolling_std` -> `rolling_standard_deviation`, `bar_range_pct` -> `bar_range_percent`, `price_vs_sma` -> `price_vs_moving_average`, `next_n_bar_realized_vol` -> `next_n_bar_realized_volatility`. MACD and VWAP stay as-is because they are universally accepted finance terms.
+- 2026-08-15: Moved the forward-looking targets out of `returns.py` into their own `targets.py` so the category files match the config categories one-to-one.

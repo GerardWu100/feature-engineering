@@ -7,22 +7,24 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
-from feature_engineering.features.returns import (
+from feature_engineering.engineering.features.returns import (
     log_return,
-    next_n_bar_realized_volatility,
-    next_n_bar_return,
     simple_return,
 )
-from feature_engineering.features.trend import (
+from feature_engineering.engineering.features.targets import (
+    next_n_bar_realized_volatility,
+    next_n_bar_return,
+)
+from feature_engineering.engineering.features.trend import (
     moving_average,
     price_vs_moving_average,
     rate_of_change,
 )
-from feature_engineering.features.volatility import (
+from feature_engineering.engineering.features.volatility import (
     bar_range_percent,
     rolling_standard_deviation,
 )
-from feature_engineering.features.volume import (
+from feature_engineering.engineering.features.volume import (
     dollar_volume,
     volume_change,
     volume_ratio,

@@ -3,7 +3,7 @@
 ## Part 1 - Conceptual Explanation
 
 `evaluation/` answers the question that follows feature computation: does a
-feature contain evidence about its target? It sits after `pipeline/engineer.py`
+feature contain evidence about its target? It sits after `engineering/compute.py`
 in the research workflow and consumes the long feature frame the pipeline
 produces: one row per symbol and timestamp, with feature and target columns.
 

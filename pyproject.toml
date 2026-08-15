@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-feature-pipeline = "feature_engineering.pipeline.cli:main"
+feature-pipeline = "feature_engineering.cli:main"
 
 [build-system]
 requires = ["setuptools>=82.0.0"]

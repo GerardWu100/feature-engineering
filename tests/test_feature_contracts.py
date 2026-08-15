@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from feature_engineering.features.registry import REGISTRY, FeatureSpec
-from feature_engineering.pipeline.engineer import compute_features
+from feature_engineering.engineering.features.registry import REGISTRY, FeatureSpec
+from feature_engineering.engineering.compute import compute_features
 
 
 def _frame() -> pd.DataFrame:

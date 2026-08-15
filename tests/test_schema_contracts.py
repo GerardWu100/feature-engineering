@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from feature_engineering.pipeline.clean import clean_ohlcv
-from feature_engineering.pipeline.load import _finalize_ohlcv_frame
+from feature_engineering.engineering.clean import clean_ohlcv
+from feature_engineering.engineering.load import _finalize_ohlcv_frame
 
 EXCHANGE_TIMEZONE = "America/New_York"
 

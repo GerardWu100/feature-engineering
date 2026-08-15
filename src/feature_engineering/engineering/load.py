@@ -42,7 +42,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from dotenv import load_dotenv
 
-from feature_engineering.pipeline.constants import (
+from feature_engineering.engineering.constants import (
     DEFAULT_CLICKHOUSE_TABLE,
     DEFAULT_CSV_SESSION,
     DEFAULT_EXCHANGE_TIMEZONE,
