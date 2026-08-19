@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import (
+    as_feature_column,
+    register,
+)
 
 # Named defaults so an omitted parameter means the same thing whether the
 # feature is called directly or configured in config.toml.
@@ -242,6 +245,18 @@ def _macd_line_series(close: pd.Series, fast: int, slow: int) -> pd.Series:
     return _ema(close, fast) - _ema(close, slow)
 
 
+def _validate_macd_spans(fast: int, slow: int, signal: int | None = None) -> None:
+    """Validate positive MACD spans and the fast/slow ordering contract."""
+    spans = {"fast": fast, "slow": slow}
+    if signal is not None:
+        spans["signal"] = signal
+    for name, span in spans.items():
+        if span < 1:
+            raise ValueError(f"MACD {name} span must be >= 1.")
+    if fast >= slow:
+        raise ValueError("MACD requires fast < slow.")
+
+
 def _macd_signal_from_line(macd: pd.Series, signal: int) -> pd.Series:
     """Return the MACD signal line: an EMA of a precomputed MACD line.
 
@@ -287,8 +302,7 @@ def macd_line(
         If ``fast`` is not less than ``slow``.
     """
     fast, slow = int(fast), int(slow)
-    if fast >= slow:
-        raise ValueError("macd_line requires fast < slow.")
+    _validate_macd_spans(fast, slow)
 
     return as_feature_column(_macd_line_series(frame["close"], fast, slow))
 
@@ -326,8 +340,7 @@ def macd_signal(
         result is reindexed back.
     """
     fast, slow, signal = int(fast), int(slow), int(signal)
-    if fast >= slow:
-        raise ValueError("macd_signal requires fast < slow.")
+    _validate_macd_spans(fast, slow, signal)
 
     # Delegate the warmup-drop + reindex to the shared helper so this stays in
     # lockstep with the histogram's signal line.
@@ -366,8 +379,7 @@ def macd_histogram(
         Histogram aligned to ``frame.index``; valid once the signal line is valid.
     """
     fast, slow, signal = int(fast), int(slow), int(signal)
-    if fast >= slow:
-        raise ValueError("macd_histogram requires fast < slow.")
+    _validate_macd_spans(fast, slow, signal)
 
     # Compute the line once and feed it to the signal helper so the two EMAs of
     # close are not evaluated twice.

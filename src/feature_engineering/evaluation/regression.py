@@ -110,6 +110,15 @@ def default_kernel_lags(n: int, *, target_horizon_bars: int | None = None) -> in
     int
         Truncation lag, at least 1.
     """
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise ValueError("n must be an integer >= 1.")
+    if target_horizon_bars is not None and (
+        not isinstance(target_horizon_bars, int)
+        or isinstance(target_horizon_bars, bool)
+        or target_horizon_bars < 1
+    ):
+        raise ValueError("target_horizon_bars must be an integer >= 1.")
+
     size_rule = int(np.floor(4.0 * (n / 100.0) ** (2.0 / 9.0)))
     overlap_rule = 0 if target_horizon_bars is None else int(target_horizon_bars) - 1
     return max(1, size_rule, overlap_rule)
@@ -170,7 +179,20 @@ def newey_west_regression(
         If fewer than 3 paired observations remain, or the feature is constant
         (zero variance) so no slope is identified.
     """
-    for column in ("timestamp", feature, target):
+    if kernel_lags is not None and (
+        not isinstance(kernel_lags, int)
+        or isinstance(kernel_lags, bool)
+        or kernel_lags < 0
+    ):
+        raise ValueError("kernel_lags must be an integer >= 0.")
+    if target_horizon_bars is not None and (
+        not isinstance(target_horizon_bars, int)
+        or isinstance(target_horizon_bars, bool)
+        or target_horizon_bars < 1
+    ):
+        raise ValueError("target_horizon_bars must be an integer >= 1.")
+
+    for column in ("symbol", "timestamp", feature, target):
         if column not in frame.columns:
             raise KeyError(f"Column {column!r} not found in the feature frame.")
 

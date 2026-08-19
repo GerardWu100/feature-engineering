@@ -194,6 +194,10 @@ def target_values_by_quantile(
         raise ValueError("target_values_by_quantile requires quantiles >= 2.")
 
     paired = _paired_rows(frame, feature, target)
+    if paired.empty:
+        raise ValueError(
+            f"No rows have both {feature!r} and {target!r}; nothing to bucket."
+        )
     bucket_labels = _bucket_labels(
         paired, feature, quantiles=quantiles, by_symbol=by_symbol
     )

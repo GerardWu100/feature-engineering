@@ -167,6 +167,37 @@ def test_compute_features_keeps_symbol_histories_separate() -> None:
     assert featured.loc[3, "ma_2"] == 202.0
 
 
+def test_compute_features_rejects_feature_that_replaces_identifier() -> None:
+    """Direct library calls must preserve symbol and timestamp identifiers."""
+    frame, _report = clean_ohlcv(_raw_frame())
+    config = {
+        "features": {
+            "parameters": [
+                {"name": "symbol", "function": "simple_return"},
+            ]
+        }
+    }
+
+    with pytest.raises(ValueError, match="reserved identifier column"):
+        compute_features(frame, config)
+
+
+def test_compute_features_rejects_duplicate_output_names() -> None:
+    """Direct library calls must not silently replace an earlier feature."""
+    frame, _report = clean_ohlcv(_raw_frame())
+    config = {
+        "features": {
+            "parameters": [
+                {"name": "return", "function": "simple_return"},
+                {"name": "return", "function": "log_return"},
+            ]
+        }
+    }
+
+    with pytest.raises(ValueError, match="Duplicate feature column name"):
+        compute_features(frame, config)
+
+
 def test_compute_features_reset_by_session_does_not_cross_day_boundary() -> None:
     """With reset_by_session, an intraday window must not reach into the prior day."""
     frame = pd.DataFrame(
@@ -252,9 +283,7 @@ def test_load_features_pulls_back_the_newest_saved_run(tmp_path: Path) -> None:
     featured = pd.DataFrame(
         {
             "symbol": ["AAPL", "AAPL"],
-            "timestamp": pd.to_datetime(
-                ["2024-01-02 09:30:00", "2024-01-02 09:31:00"]
-            ),
+            "timestamp": pd.to_datetime(["2024-01-02 09:30:00", "2024-01-02 09:31:00"]),
             "log_return": [0.01, -0.02],
         }
     )

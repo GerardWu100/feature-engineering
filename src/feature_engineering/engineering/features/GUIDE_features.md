@@ -50,6 +50,10 @@ the previous window's statistic predicts the next window's statistic.
 `bars` must be at least 2 because the standard deviation of one return is
 undefined.
 
+The backward-looking `rolling_standard_deviation` uses a window measured in
+prices. Its minimum is 3 prices, which form 2 returns; one return cannot have a
+sample standard deviation.
+
 ## Part 2 - Code Reference
 
 | File | Key contents |
@@ -76,9 +80,10 @@ with `@register(...)`.
 - 2026-04-26: `next_n_day_return` now uses the current bar close as the denominator to avoid intraday label leakage from the current day-end close.
 - 2026-05-19: Added `as_feature_column` so every feature returns an unnamed Series through one shared helper instead of repeating `values.name = None`.
 - 2026-06-23: Replaced `next_n_day_return` with `next_n_bar_return`, a plain forward N-bar simple return (`close[t+bars]/close[t] - 1`). The bar horizon plus the new `reset_by_session` engineer option removed the earlier hybrid intraday/daily target logic.
-- 2026-06-23: Added `relative_strength_index` and Moving Average Convergence/Divergence (`macd_line`, `macd_signal`, `macd_histogram`) to `trend.py`, `average_true_range` to `volatility.py`, and `vwap`/`price_vs_vwap` to `volume.py`. The exponential-moving-average features drop warmup NaNs before smoothing (via `dropna`/`reindex`) so the recurrence seeds unambiguously and the constant-time online accumulators in `engine/online.py` reproduce them exactly.
+- 2026-06-23: Added `relative_strength_index` and Moving Average Convergence/Divergence (`macd_line`, `macd_signal`, `macd_histogram`) to `trend.py`, `average_true_range` to `volatility.py`, and `vwap`/`price_vs_vwap` to `volume.py`. The exponential-moving-average features drop warmup NaNs before smoothing (via `dropna`/`reindex`) so the recurrence seeds unambiguously.
 - 2026-08-10: Added `next_n_bar_realized_volatility`, a forward realized-volatility target: the sample standard deviation of the next `bars` one-bar log returns, computed as a backward rolling std shifted back by `bars` so each row's window covers exactly the future returns and the final `bars` rows are `NaN`.
-- 2026-08-09: All feature parameter defaults (`DEFAULT_MOVING_AVERAGE_WINDOW`, `DEFAULT_RATE_OF_CHANGE_PERIODS`, Relative Strength Index and Moving Average Convergence/Divergence constants) now live at the top of `trend.py` and are imported by the online engine, so an omitted configuration parameter means the same thing on both paths. `average_true_range` reuses the shared `_wilder_average` helper, and `macd_histogram` computes the convergence/divergence line once and feeds it to the signal helper.
+- 2026-08-09: All feature parameter defaults (`DEFAULT_MOVING_AVERAGE_WINDOW`, `DEFAULT_RATE_OF_CHANGE_PERIODS`, Relative Strength Index and Moving Average Convergence/Divergence constants) now live at the top of `trend.py`, so direct calls and configured calls share the same defaults. `average_true_range` reuses the shared `_wilder_average` helper, and `macd_histogram` computes the convergence/divergence line once and feeds it to the signal helper.
 - 2026-08-10: Renamed every non-standard abbreviation in the user-facing surface so the config and data contract read as plain words: config key `fn` -> `function`, `[[features.params]]` -> `[[features.parameters]]`, column `ts` -> `timestamp` (the ClickHouse column is still `ts` and is aliased in the query), session `rth` -> `regular`, and the feature functions `rolling_std` -> `rolling_standard_deviation`, `bar_range_pct` -> `bar_range_percent`, `price_vs_sma` -> `price_vs_moving_average`, `next_n_bar_realized_vol` -> `next_n_bar_realized_volatility`. MACD and VWAP stay as-is because they are universally accepted finance terms.
 - 2026-08-15: Moved the forward-looking targets out of `returns.py` into their own `targets.py` so the category files match the config categories one-to-one.
 - 2026-08-15: Replaced the `(frame, parameters_dict)` feature signature with plain keyword arguments (`moving_average(frame, window=20)`), so features are directly callable pandas-style; the pipeline unpacks config parameters into the same keyword calls. Features whose one parameter used to be required (`moving_average`, `rolling_standard_deviation`, `volume_ratio`) now default to a 20-row window.
+- 2026-08-19: Hardened feature boundaries: reserved and duplicate output names are rejected, Moving Average Convergence/Divergence spans are validated, and rolling sample volatility requires enough prices to form two returns.

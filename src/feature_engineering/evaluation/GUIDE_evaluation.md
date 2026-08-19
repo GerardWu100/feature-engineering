@@ -59,7 +59,8 @@ and `tests/test_evaluation_plots.py`.
 
 - 2026-08-10: Created the subpackage with IC, regression, quantile,
   summary-table, and plotting modules, alongside the new
-  `next_n_bar_realized_volatility` volatility target in `features/returns.py`.
+  `next_n_bar_realized_volatility` volatility target in
+  `engineering/features/targets.py`.
 - 2026-08-10: Audit-driven corrections in the same session: pooled Newey-West
   replaced with Driscoll-Kraay standard errors (cross-symbol dependence had
   inflated t-statistics), rolling Spearman now uses average-tie ranks and
@@ -68,3 +69,4 @@ and `tests/test_evaluation_plots.py`.
   degrades instead of crashing on heavy ties, and infinities are masked before
   every statistic.
 - 2026-08-10: Spelled out abbreviated result fields: `mean_ts_ic` -> `mean_time_series_ic`, `t_stat` -> `t_statistic`, `beta_se` -> `beta_standard_error`, `std_ic` -> `ic_standard_deviation`, `icir` -> `ic_information_ratio`, `hac_lags` -> `kernel_lags`, `q10`/`q90` -> `percentile_10`/`percentile_90`, `std` -> `standard_deviation`, and `n` -> `observations`.
+- 2026-08-19: Regression now rejects invalid lag and target-horizon inputs; quantile plots reject empty finite samples and consistently exclude infinities.

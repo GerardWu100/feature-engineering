@@ -104,6 +104,67 @@ def test_validate_config_rejects_invalid_output_format() -> None:
         validate_config(config)
 
 
+def test_validate_config_rejects_feature_names_that_replace_identifiers() -> None:
+    """A computed feature must not overwrite the symbol or timestamp key."""
+    config = _valid_csv_config()
+    config["features"]["parameters"][0]["name"] = "symbol"
+
+    with pytest.raises(ConfigValidationError, match="reserved identifier column"):
+        validate_config(config)
+
+
+def test_validate_config_rejects_unknown_feature_parameter() -> None:
+    """A misspelled feature setting should fail before loading any data."""
+    config = _valid_csv_config()
+    config["features"]["parameters"][1]["widnow"] = 20
+
+    with pytest.raises(ConfigValidationError, match="unsupported parameter"):
+        validate_config(config)
+
+
+@pytest.mark.parametrize("parameter_name", ["fast", "slow", "signal"])
+def test_validate_config_rejects_non_positive_macd_spans(parameter_name: str) -> None:
+    """Every exponential-moving-average span must be a positive integer."""
+    feature_item = {
+        "name": "macd",
+        "function": "macd_signal",
+        "fast": 12,
+        "slow": 26,
+        "signal": 9,
+    }
+    feature_item[parameter_name] = 0
+    config = _valid_csv_config()
+    config["features"]["parameters"] = [feature_item]
+
+    with pytest.raises(ConfigValidationError, match=f"{parameter_name}.*integer >= 1"):
+        validate_config(config)
+
+
+def test_validate_config_rejects_macd_fast_span_not_below_slow_span() -> None:
+    """The fast average must react faster than the slow average."""
+    config = _valid_csv_config()
+    config["features"]["parameters"] = [
+        {
+            "name": "macd",
+            "function": "macd_line",
+            "fast": 26,
+            "slow": 12,
+        }
+    ]
+
+    with pytest.raises(ConfigValidationError, match="fast must be less than slow"):
+        validate_config(config)
+
+
+def test_validate_config_rejects_unknown_data_quality_rule() -> None:
+    """A misspelled cleaning rule must not be silently ignored."""
+    config = _valid_csv_config()
+    config["data_quality"]["drop_negative_volum"] = True
+
+    with pytest.raises(ConfigValidationError, match="unknown option"):
+        validate_config(config)
+
+
 def test_validate_config_accepts_one_sided_csv_date_filter() -> None:
     """CSV runs may keep only one side of the optional date filter."""
     config = _valid_csv_config()

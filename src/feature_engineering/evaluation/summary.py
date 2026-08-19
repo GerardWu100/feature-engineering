@@ -70,6 +70,15 @@ def evaluate_features(
     t-statistic near 2 is expected by luck alone. Treat this table as a
     ranking device, not as proof, and confirm survivors out of sample.
     """
+    if target_horizon_bars is not None and (
+        not isinstance(target_horizon_bars, int)
+        or isinstance(target_horizon_bars, bool)
+        or target_horizon_bars < 1
+    ):
+        raise ValueError("target_horizon_bars must be an integer >= 1.")
+    if not isinstance(quantiles, int) or isinstance(quantiles, bool) or quantiles < 2:
+        raise ValueError("quantiles must be an integer >= 2.")
+
     if features is None:
         features = [
             column

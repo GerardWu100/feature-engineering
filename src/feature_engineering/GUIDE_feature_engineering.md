@@ -46,9 +46,14 @@ Start with `cli.py` to follow execution, then read
 `engineering/features/registry.py` to see how configured feature names resolve
 to formulas, and `evaluation/` for feature testing after computation.
 
+Configuration validation rejects unknown cleaning options, unsupported feature
+parameters, invalid window and smoothing spans, duplicate feature names, and
+feature names that would replace identifier columns.
+
 ## Part 3 - Short Journal
 
 - 2026-04-26: Added the `feature_engineering` package to reduce import-name collisions in installed and notebook workflows.
 - 2026-05-14: Added an explicit config-validation boundary.
 - 2026-08-10: Added the `evaluation/` subpackage (IC, Newey-West regression, quantile analysis, plots) and the `next_n_bar_realized_volatility` volatility target.
 - 2026-08-15: Restructured into two major parts: `engineering/` (formerly `features/` + `pipeline/`) and `evaluation/`. Moved forward-looking targets into `features/targets.py`, renamed export to `save_features`, added `load_features` to pull stored datasets back, and removed the unused `engine/` subpackage (batch and online engines).
+- 2026-08-19: Strengthened the configuration boundary so misspelled options and invalid feature contracts fail before data loading.

@@ -164,6 +164,14 @@ def test_rolling_std_window_counts_prices_not_returns() -> None:
     assert math.isclose(rolling_values.iloc[4], expected_std)
 
 
+def test_rolling_standard_deviation_rejects_two_price_window() -> None:
+    """Two prices contain one return, which cannot have a sample deviation."""
+    frame = _sample_ohlcv_frame()
+
+    with pytest.raises(ValueError, match="window >= 3"):
+        rolling_standard_deviation(frame, window=2)
+
+
 def test_volume_features_match_manual_formulas() -> None:
     """Volume features should expose relative, dollar, and percent-change volume."""
     frame = _sample_ohlcv_frame()

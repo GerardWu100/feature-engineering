@@ -70,6 +70,20 @@ def test_violin_by_quantile_builds_and_saves(frame: pd.DataFrame, tmp_path) -> N
     assert all(label.split("\n")[1].startswith("n=") for label in tick_labels)
 
 
+def test_violin_by_quantile_rejects_no_finite_pairs() -> None:
+    """An empty finite sample should produce a clear analysis error."""
+    frame = pd.DataFrame(
+        {
+            "symbol": ["AAPL", "AAPL"],
+            "signal": [np.nan, np.inf],
+            "target": [0.01, 0.02],
+        }
+    )
+
+    with pytest.raises(ValueError, match="No rows have both"):
+        violin_by_quantile(frame, "signal", "target")
+
+
 def test_spread_rows_handles_continuous_and_flag_features(
     frame: pd.DataFrame, tmp_path
 ) -> None:

@@ -26,6 +26,10 @@ names and parameters, such as a 20-bar and a 50-bar moving average.
 Each stage is a plain function over pandas DataFrames. Research code can import
 any stage directly and skip writing files.
 
+Loading rejects missing timestamps and duplicate symbol-timestamp keys. Feature
+computation rejects duplicate output names and names that would replace the
+`symbol` or `timestamp` identifier columns.
+
 ## Part 2 - Code Reference
 
 | File | Purpose |
@@ -39,8 +43,8 @@ any stage directly and skip writing files.
 
 Feature functions take keyword parameters directly
 (`moving_average(frame, window=20)`). `compute.py` unpacks each config entry's
-parameters into that same call, so a stray config key fails as an unexpected
-keyword argument.
+parameters into that same call. Config validation rejects stray parameter names
+before loading data.
 
 `compute.py` exposes `selected_feature_configs` and `resolve_feature` for code
 that needs the active feature list without computing anything (the catalog in
@@ -49,3 +53,4 @@ that needs the active feature list without computing anything (the catalog in
 ## Part 3 - Short Journal
 
 - 2026-08-15: Created `engineering/` from the former `pipeline/` and `features/` subpackages so the package has two clear parts: build features here, test them in `evaluation/`. Renamed `engineer.py` to `compute.py` and `export.py` to `store.py`, and added `load_features` so stored runs can be pulled back without re-running the pipeline.
+- 2026-08-19: Loading now rejects missing timestamps, and computation protects identifier columns and duplicate feature names even when called directly.

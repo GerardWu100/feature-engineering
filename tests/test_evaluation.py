@@ -297,6 +297,23 @@ def test_default_hac_lags_covers_target_overlap() -> None:
     assert default_kernel_lags(10) >= 1
 
 
+@pytest.mark.parametrize(
+    ("keyword", "value", "message"),
+    [
+        ("kernel_lags", -1, "kernel_lags must be an integer >= 0"),
+        ("target_horizon_bars", 0, "target_horizon_bars must be an integer >= 1"),
+    ],
+)
+def test_regression_rejects_invalid_lag_inputs(
+    keyword: str, value: int, message: str
+) -> None:
+    """Invalid dependence horizons must not silently produce false inference."""
+    frame = _synthetic_frame(n_symbols=2, n_bars=100)
+
+    with pytest.raises(ValueError, match=message):
+        newey_west_regression(frame, "signal", "fwd_target", **{keyword: value})
+
+
 def test_target_by_feature_quantile_is_monotone_for_linear_signal() -> None:
     """Bucket means should rise from bottom to top bucket for a positive slope."""
     frame = _synthetic_frame()
@@ -328,3 +345,20 @@ def test_evaluate_features_ranks_signal_above_noise() -> None:
     assert signal_row["mean_time_series_ic"] > 0.9
     assert signal_row["t_statistic"] > 10
     assert signal_row["quantile_spread"] > 0
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "message"),
+    [
+        ("target_horizon_bars", 0, "target_horizon_bars must be an integer >= 1"),
+        ("quantiles", 1, "quantiles must be an integer >= 2"),
+    ],
+)
+def test_evaluate_features_rejects_invalid_analysis_settings(
+    keyword: str, value: int, message: str
+) -> None:
+    """Invalid global settings must not become rows of missing statistics."""
+    frame = _synthetic_frame()
+
+    with pytest.raises(ValueError, match=message):
+        evaluate_features(frame, "fwd_target", **{keyword: value})

@@ -9,7 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import (
+    as_feature_column,
+    register,
+)
 from feature_engineering.engineering.features.trend import _wilder_average
 
 # Default rolling window (in price rows) for the log-return standard deviation.
@@ -36,7 +39,9 @@ def rolling_standard_deviation(
     frame
         Single-symbol OHLCV frame with a ``close`` column.
     window
-        Number of price rows in the rolling standard deviation. Default is 20.
+        Number of price rows in the rolling standard deviation. Default is 20;
+        minimum is 3 because three prices form the two returns needed for a
+        sample standard deviation.
 
     Returns
     -------
@@ -46,8 +51,8 @@ def rolling_standard_deviation(
         formed by those three prices.
     """
     window = int(window)
-    if window < 2:
-        raise ValueError("rolling_standard_deviation requires window >= 2.")
+    if window < 3:
+        raise ValueError("rolling_standard_deviation requires window >= 3.")
 
     # The first log return is NaN because one price alone cannot form a return.
     # A window of N prices contains N - 1 adjacent returns. The rolling return
@@ -56,8 +61,7 @@ def rolling_standard_deviation(
     return_window = window - 1
     minimum_returns = max(2, return_window)
     values = log_returns.rolling(
-        window=return_window,
-        min_periods=minimum_returns,
+        window=return_window, min_periods=minimum_returns
     ).std()
     return as_feature_column(values)
 

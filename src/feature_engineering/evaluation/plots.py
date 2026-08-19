@@ -91,6 +91,12 @@ def _maybe_save(figure: Figure, save_path: str | Path | None) -> None:
         figure.savefig(save_path, dpi=FIGURE_DPI, bbox_inches="tight")
 
 
+def _finite_rows(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Return selected plot columns after removing missing and infinite values."""
+    working = frame.loc[:, columns].replace([np.inf, -np.inf], np.nan)
+    return working.dropna(subset=columns)
+
+
 def violin_by_quantile(
     frame: pd.DataFrame,
     feature: str,
@@ -176,7 +182,7 @@ def violin_by_quantile(
             zorder=5,
         )
 
-    unconditional = float(frame.loc[:, [feature, target]].dropna()[target].mean())
+    unconditional = float(_finite_rows(frame, [feature, target])[target].mean())
     panel.axhline(
         unconditional, color=RULE_COLOUR, linestyle="--", linewidth=1.4, zorder=1
     )
@@ -305,7 +311,7 @@ def spread_rows_by_state(
     if not features:
         raise ValueError("spread_rows_by_state needs at least one feature.")
 
-    outcome_frame = frame.dropna(subset=[target])
+    outcome_frame = _finite_rows(frame, [target])
     unconditional = float(outcome_frame[target].mean())
 
     # Height scales with the number of feature blocks: one header + up to
@@ -338,7 +344,7 @@ def spread_rows_by_state(
         )
         height -= 1.0
 
-        paired = frame.dropna(subset=[feature, target])
+        paired = _finite_rows(frame, ["symbol", feature, target])
         states = paired.groupby("symbol")[feature].transform(_tercile_states)
         # Draw whichever states exist, in a fixed order. Symbols can disagree
         # (one flag-like, one continuous), so the order is the union of what

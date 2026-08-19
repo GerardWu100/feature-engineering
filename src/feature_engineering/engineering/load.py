@@ -19,7 +19,7 @@ Data contract (assumptions every caller must satisfy)
    timezone-aware inputs are converted. The ClickHouse session filter below
    selects regular trading hours with ``toHour(ts)``/``toMinute(ts)``, so a
    database column stored in UTC would select the wrong bars. The intraday
-   ``reset_by_session`` option in ``engineer.py`` likewise groups by the local
+   ``reset_by_session`` option in ``compute.py`` likewise groups by the local
    calendar date.
 3. One row per symbol per bar, with consistent bar size across the run.
    Duplicate ``(symbol, timestamp)`` bars are rejected with an error because they
@@ -298,8 +298,8 @@ def _finalize_ohlcv_frame(
     KeyError
         If required OHLCV columns are missing.
     ValueError
-        If symbols are missing or empty, or if duplicate ``(symbol, timestamp)``
-        bars exist after timezone normalization.
+        If symbols or timestamps are missing, or if duplicate
+        ``(symbol, timestamp)`` bars exist after timezone normalization.
     """
     missing_columns = [
         column for column in OHLCV_COLUMNS if column not in frame.columns
@@ -318,6 +318,8 @@ def _finalize_ohlcv_frame(
     finalized["timestamp"] = _parse_timestamps_as_exchange_local(
         finalized["timestamp"], exchange_timezone
     )
+    if finalized["timestamp"].isna().any():
+        raise ValueError("OHLCV timestamps must be present and valid")
 
     for column in NUMERIC_OHLCV_COLUMNS:
         finalized[column] = pd.to_numeric(finalized[column], errors="coerce")

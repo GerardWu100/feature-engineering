@@ -10,6 +10,7 @@ import pandas as pd
 from feature_engineering.engineering.features.registry import REGISTRY, FeatureSpec
 from feature_engineering.engineering.constants import (
     IDENTIFIER_COLUMNS,
+    IDENTIFIER_COLUMN_SET,
     sort_by_symbol_and_time,
 )
 
@@ -81,6 +82,8 @@ def apply_resolved_features(
     pandas.DataFrame
         Identifier columns plus one column per resolved feature.
     """
+    _validate_resolved_feature_names(resolved_features)
+
     # Keep identifier columns separate from computed feature columns so exports
     # stay compact and clearly signal what each row represents.
     output = sorted_frame.loc[:, IDENTIFIER_COLUMNS].copy()
@@ -100,6 +103,24 @@ def apply_resolved_features(
         )
 
     return output
+
+
+def _validate_resolved_feature_names(
+    resolved_features: list[tuple[str, FeatureSpec, dict[str, Any]]],
+) -> None:
+    """Reject output names that would overwrite another dataset column."""
+    feature_names = [column_name for column_name, _spec, _params in resolved_features]
+    reserved_names = sorted(set(feature_names) & IDENTIFIER_COLUMN_SET)
+    if reserved_names:
+        raise ValueError(
+            f"Feature name cannot replace reserved identifier column: {reserved_names}."
+        )
+
+    duplicate_names = sorted(
+        {name for name in feature_names if feature_names.count(name) > 1}
+    )
+    if duplicate_names:
+        raise ValueError(f"Duplicate feature column name: {duplicate_names}.")
 
 
 def _feature_group_keys(

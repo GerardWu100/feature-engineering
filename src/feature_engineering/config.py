@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -11,6 +12,7 @@ from feature_engineering.engineering.features.registry import REGISTRY
 from feature_engineering.engineering.constants import (
     DEFAULT_CLICKHOUSE_TABLE,
     DEFAULT_EXCHANGE_TIMEZONE,
+    IDENTIFIER_COLUMN_SET,
     SQL_IDENTIFIER_PATTERN,
 )
 from feature_engineering.engineering.load import SESSION_FILTER_SQL
@@ -21,7 +23,27 @@ ALLOWED_OUTPUT_FORMATS = {"csv", "parquet"}
 # disagree about which sessions exist.
 ALLOWED_SESSIONS = frozenset(SESSION_FILTER_SQL)
 REQUIRED_RUN_KEYS = {"output_dir", "output_formats", "source"}
-POSITIVE_INTEGER_FEATURE_PARAMS = {"bars", "periods", "window"}
+POSITIVE_INTEGER_FEATURE_PARAMS = {
+    "bars",
+    "fast",
+    "periods",
+    "signal",
+    "slow",
+    "window",
+}
+SUPPORTED_DATA_QUALITY_OPTIONS = {
+    "drop_high_lt_low",
+    "drop_missing_numeric_values",
+    "drop_negative_volume",
+    "drop_ohlc_violations",
+    "drop_zero_prices",
+}
+FEATURE_PARAMETER_MINIMUMS = {
+    "average_true_range": {"window": 2},
+    "next_n_bar_realized_volatility": {"bars": 2},
+    "relative_strength_index": {"window": 2},
+    "rolling_standard_deviation": {"window": 3},
+}
 
 
 class ConfigValidationError(ValueError):
@@ -124,7 +146,7 @@ def _require_keys(
 
 
 def _validate_output_formats(output_formats: Any) -> None:
-    """Validate the list of dataset formats requested by ``export.py``."""
+    """Validate the list of dataset formats requested by the store stage."""
     if not isinstance(output_formats, list) or not output_formats:
         raise ConfigValidationError("run.output_formats must be a non-empty list.")
 
@@ -169,9 +191,12 @@ def _validate_date_range(run_config: dict[str, Any]) -> None:
 def _parse_config_date(value: Any, label: str) -> pd.Timestamp:
     """Parse one config date and report the field name on failure."""
     try:
-        return pd.Timestamp(value)
+        parsed = pd.Timestamp(value)
     except (TypeError, ValueError) as exc:
         raise ConfigValidationError(f"{label} must be a valid date.") from exc
+    if pd.isna(parsed):
+        raise ConfigValidationError(f"{label} must be a valid date.")
+    return parsed
 
 
 def _validate_csv_run_config(run_config: dict[str, Any]) -> None:
@@ -211,6 +236,12 @@ def _validate_data_quality_config(data_quality_config: Any) -> None:
 
     if not isinstance(data_quality_config, dict):
         raise ConfigValidationError("data_quality must be a table.")
+
+    unknown_options = sorted(set(data_quality_config) - SUPPORTED_DATA_QUALITY_OPTIONS)
+    if unknown_options:
+        raise ConfigValidationError(
+            f"data_quality contains unknown option(s): {unknown_options}."
+        )
 
     for rule_name, enabled in data_quality_config.items():
         if not isinstance(enabled, bool):
@@ -322,18 +353,45 @@ def _validate_feature_item(feature_item: dict[str, Any], index: int) -> None:
     if function_name not in REGISTRY:
         raise ConfigValidationError(f"{label}.function is unknown: {function_name}.")
 
+    if feature_item["name"] in IDENTIFIER_COLUMN_SET:
+        raise ConfigValidationError(
+            f"{label}.name cannot replace reserved identifier column "
+            f"{feature_item['name']!r}."
+        )
+
     if "enabled" in feature_item and not isinstance(feature_item["enabled"], bool):
         raise ConfigValidationError(f"{label}.enabled must be true or false.")
 
-    for parameter_name in POSITIVE_INTEGER_FEATURE_PARAMS:
+    spec = REGISTRY[function_name]
+    allowed_parameters = set(inspect.signature(spec.function).parameters) - {"frame"}
+    configured_parameters = set(feature_item) - {"enabled", "function", "name"}
+    unsupported_parameters = sorted(configured_parameters - allowed_parameters)
+    if unsupported_parameters:
+        raise ConfigValidationError(
+            f"{label} contains unsupported parameter(s) for {function_name}: "
+            f"{unsupported_parameters}."
+        )
+
+    for parameter_name in POSITIVE_INTEGER_FEATURE_PARAMS & configured_parameters:
+        minimum = FEATURE_PARAMETER_MINIMUMS.get(function_name, {}).get(
+            parameter_name, 1
+        )
         if parameter_name in feature_item:
             _validate_positive_integer(
                 feature_item[parameter_name],
                 label=f"{label}.{parameter_name}",
+                minimum=minimum,
             )
 
+    if function_name.startswith("macd_"):
+        parameters = inspect.signature(spec.function).parameters
+        fast = feature_item.get("fast", parameters["fast"].default)
+        slow = feature_item.get("slow", parameters["slow"].default)
+        if fast >= slow:
+            raise ConfigValidationError(f"{label}.fast must be less than slow.")
 
-def _validate_positive_integer(value: Any, *, label: str) -> None:
+
+def _validate_positive_integer(value: Any, *, label: str, minimum: int = 1) -> None:
     """Validate a feature parameter that must be an integer greater than zero."""
-    if not isinstance(value, int) or value < 1:
-        raise ConfigValidationError(f"{label} must be an integer >= 1.")
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise ConfigValidationError(f"{label} must be an integer >= {minimum}.")

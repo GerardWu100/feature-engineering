@@ -57,6 +57,15 @@ def test_duplicate_symbol_timestamp_bars_are_rejected() -> None:
         _finalize_ohlcv_frame(frame, exchange_timezone=EXCHANGE_TIMEZONE)
 
 
+def test_missing_timestamps_are_rejected() -> None:
+    """A row without a decision time cannot enter rolling feature windows."""
+    frame = _raw_frame()
+    frame.loc[0, "timestamp"] = None
+
+    with pytest.raises(ValueError, match="timestamps must be present and valid"):
+        _finalize_ohlcv_frame(frame, exchange_timezone=EXCHANGE_TIMEZONE)
+
+
 def test_negative_volume_is_dropped_by_cleaning() -> None:
     """Negative volume is invalid market data and should be removed."""
     frame = _finalize_ohlcv_frame(_raw_frame(), exchange_timezone=EXCHANGE_TIMEZONE)
