@@ -291,6 +291,46 @@ def selected_feature_configs(config: dict[str, Any]) -> list[dict[str, Any]]:
     return selected_feature_configs
 
 
+TARGET_CATEGORY = "target"
+
+
+def target_column_names(config: dict[str, Any]) -> list[str]:
+    """Return the output column names that hold forward-looking targets.
+
+    A target is computed from rows that come after the current bar, so it must
+    never be treated as a predictor. Column names are chosen by the user in
+    ``features.parameters`` and do not have to match the registry function
+    name, so the only reliable way to recognize a target column is to look up
+    each configured entry's registry category. Pass the result to
+    ``evaluate_features(..., target_columns=...)`` so no target can be scored
+    as if it were a feature.
+
+    Parameters
+    ----------
+    config
+        Same config dict passed to :func:`compute_features`.
+
+    Returns
+    -------
+    list[str]
+        Output column names, in config order, whose registry category is
+        ``"target"``. Only enabled entries that survive the category
+        include/exclude filters are listed, so the result matches the columns
+        :func:`compute_features` actually produced. With the shipped default
+        ``exclude_categories = ["target"]`` this list is empty.
+
+    Examples
+    --------
+    >>> target_column_names(config)  # doctest: +SKIP
+    ['next_1bar_return', 'next_20bar_realized_volatility']
+    """
+    return [
+        item["name"]
+        for item in selected_feature_configs(config)
+        if REGISTRY[item["function"]].category == TARGET_CATEGORY
+    ]
+
+
 def _category_is_selected(
     category: str,
     *,

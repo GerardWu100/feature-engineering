@@ -32,7 +32,10 @@ from feature_engineering.cli import run_pipeline
 from feature_engineering.engineering import features
 from feature_engineering.config import validate_config
 from feature_engineering.engineering.clean import clean_ohlcv
-from feature_engineering.engineering.compute import compute_features
+from feature_engineering.engineering.compute import (
+    compute_features,
+    target_column_names,
+)
 from feature_engineering.engineering.features.registry import (
     REGISTRY,
     FeatureSpec,
@@ -59,5 +62,6 @@ __all__ = [
     "register",
     "run_pipeline",
     "save_features",
+    "target_column_names",
     "validate_config",
 ]

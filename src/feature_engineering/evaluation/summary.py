@@ -24,6 +24,7 @@ def evaluate_features(
     target: str,
     *,
     features: list[str] | None = None,
+    target_columns: list[str] | None = None,
     target_horizon_bars: int | None = None,
     quantiles: int = 5,
 ) -> pd.DataFrame:
@@ -38,7 +39,17 @@ def evaluate_features(
         Target column name to evaluate against.
     features
         Feature column names to test. ``None`` (default) tests every numeric
-        column except identifiers and the target itself.
+        column except identifiers, ``target``, and anything listed in
+        ``target_columns``.
+    target_columns
+        Every forward-looking column in ``frame``, including ``target``
+        itself. Only used when ``features`` is ``None``. A frame that carries
+        more than one target (a 1-bar return and a 20-bar return, say) would
+        otherwise let the second target in as a "feature", and a column built
+        from future prices scores near the top of the table by construction,
+        not because it predicts anything. Get the list from
+        ``feature_engineering.engineering.compute.target_column_names(config)``
+        using the same config that produced the frame.
     target_horizon_bars
         Forward horizon of the target in bars (e.g. 20 for a 20-bar target).
         Passed to the Newey-West lag rule so overlapping windows are covered.
@@ -69,6 +80,11 @@ def evaluate_features(
     Screening many features is multiple testing: with 20 features, one
     t-statistic near 2 is expected by luck alone. Treat this table as a
     ranking device, not as proof, and confirm survivors out of sample.
+
+    An explicit ``features`` list is always safest. When relying on
+    auto-detection, pass ``target_columns`` too: a forward-looking column left
+    in the candidate set will top the ranking for a mechanical reason and can
+    easily be mistaken for a discovery.
     """
     if target_horizon_bars is not None and (
         not isinstance(target_horizon_bars, int)
@@ -80,11 +96,14 @@ def evaluate_features(
         raise ValueError("quantiles must be an integer >= 2.")
 
     if features is None:
+        # Never auto-select a forward-looking column. ``target`` is always
+        # excluded; ``target_columns`` covers the other targets the same run
+        # produced, which the frame itself gives no way to recognize.
+        excluded_columns = NON_FEATURE_COLUMNS | {target} | set(target_columns or [])
         features = [
             column
             for column in frame.columns
-            if column not in NON_FEATURE_COLUMNS
-            and column != target
+            if column not in excluded_columns
             and pd.api.types.is_numeric_dtype(frame[column])
         ]
     if not features:

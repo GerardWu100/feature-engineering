@@ -347,6 +347,74 @@ def test_evaluate_features_ranks_signal_above_noise() -> None:
     assert signal_row["quantile_spread"] > 0
 
 
+def _two_target_frame() -> pd.DataFrame:
+    """Build a one-symbol frame holding a real feature and two forward targets.
+
+    Mirrors the pipeline output when ``exclude_categories`` does not drop the
+    ``target`` category: both a 1-bar and a 5-bar forward return are present.
+    The 5-bar return overlaps the 1-bar return by construction, so scoring it
+    as a feature produces a large information coefficient that says nothing
+    about prediction.
+    """
+    rng = np.random.default_rng(RANDOM_SEED)
+    n_bars = 400
+    close = pd.Series(100.0 * np.exp(np.cumsum(rng.normal(0.0, 0.01, n_bars))))
+
+    return pd.DataFrame(
+        {
+            "symbol": "AAA",
+            "timestamp": pd.date_range("2024-01-02", periods=n_bars, freq="D"),
+            "log_return": np.log(close / close.shift(1)),
+            "next_1bar_return": close.shift(-1) / close - 1.0,
+            "next_5bar_return": close.shift(-5) / close - 1.0,
+        }
+    )
+
+
+def test_evaluate_features_excludes_declared_target_columns() -> None:
+    """A second forward target must never be auto-selected as a feature."""
+    frame = _two_target_frame()
+
+    table = evaluate_features(
+        frame,
+        "next_1bar_return",
+        target_columns=["next_1bar_return", "next_5bar_return"],
+        target_horizon_bars=1,
+    )
+
+    assert list(table["feature"]) == ["log_return"]
+
+
+def test_evaluate_features_without_target_columns_lets_a_target_leak_in() -> None:
+    """Pin the reason ``target_columns`` exists: the leak is real and it wins.
+
+    Without the declaration the frame gives no way to tell one forward-looking
+    column from another, so the overlapping 5-bar target is scored and tops the
+    ranking on overlap alone.
+    """
+    frame = _two_target_frame()
+
+    table = evaluate_features(frame, "next_1bar_return", target_horizon_bars=1)
+
+    assert table.iloc[0]["feature"] == "next_5bar_return"
+    assert table.iloc[0]["mean_time_series_ic"] > 0.3
+
+
+def test_target_columns_are_ignored_when_features_are_explicit() -> None:
+    """An explicit feature list is the caller's decision and stays untouched."""
+    frame = _two_target_frame()
+
+    table = evaluate_features(
+        frame,
+        "next_1bar_return",
+        features=["next_5bar_return"],
+        target_columns=["next_1bar_return", "next_5bar_return"],
+        target_horizon_bars=1,
+    )
+
+    assert list(table["feature"]) == ["next_5bar_return"]
+
+
 @pytest.mark.parametrize(
     ("keyword", "value", "message"),
     [

@@ -1,45 +1,46 @@
 # Feature Engineering
 
-Computes stock features from OHLCV (open, high, low, close, volume) data and
-evaluates them against targets.
+Builds stock features from OHLCV bars—open, high, low, close, and volume—and
+tests those features against future targets.
 
 ## What it does
 
 The package has two parts:
 
-1. **Feature engineering** (`feature_engineering.engineering`) builds feature
-   datasets: `load data -> clean invalid rows -> compute features -> store files`.
-2. **Feature evaluation** (`feature_engineering.evaluation`) tests stored
-   features against forward-looking targets.
+1. **Feature engineering** loads and cleans market data, computes the selected
+   features, and stores the result.
+2. **Feature evaluation** tests stored features against forward-looking targets.
 
-- Loads OHLCV bars from ClickHouse (`firstrate.stocks`) or a local CSV file.
-- Validates `config.toml` before loading data, so invalid feature names,
-  category filters, output formats, and windows fail with a clear message.
-- Drops impossible rows: missing values, non-positive prices, `high < low`, and
-  open/close values outside the low-high range.
-- Computes features by category: `returns`, `trend` (moving average, rate of
-  change, RSI, MACD), `volatility` (rolling standard deviation, bar range,
-  ATR), `volume` (relative volume, dollar volume, VWAP), and `target`
-  (forward-looking labels for supervised learning). Feature names and
-  parameters come from `config.toml`, so users can change them without editing
-  Python code.
-- Stores Parquet and/or CSV, a `feature_catalog.csv` describing each feature,
-  and a `run_summary` JSON for reproducibility. `load_features` reads a stored
-  run back into a DataFrame.
-- Evaluates features against targets with information coefficients, Newey-West
-  regression, quantile spreads, and plots. See `feature_engineering.evaluation`.
+The pipeline can:
 
-See `GUIDE_ROOT.md` and `PROJECT_OVERVIEW.md` for architecture and data-flow
-details. `PROJECT_OVERVIEW.md`, under "Important Assumptions", covers adjusted
-prices, timezone handling, and the one-row-per-bar assumption.
+- Load OHLCV bars from ClickHouse (`firstrate.stocks`) or a local CSV file.
+- Validate `config.toml` before loading data. Invalid feature names, category
+  filters, output formats, or windows fail early with a clear message.
+- Drop impossible rows: rows with missing values, non-positive prices, a high
+  below the low, or open/close values outside the low-high range.
+- Compute features by category: returns, trend, volatility, volume, and target.
+  The trend category includes moving averages, rate of change, relative
+  strength index (RSI), and moving average convergence divergence (MACD). The
+  feature names and parameters come from `config.toml`, so you can change them
+  without editing Python code.
+- Store Parquet and/or CSV data, a `feature_catalog.csv`, and a `run_summary`
+  JSON file for reproducibility. `load_features` reads a stored run back into a
+  DataFrame.
+- Evaluate features with information coefficients, Newey-West regression,
+  quantile spreads, and plots. See `feature_engineering.evaluation`.
+
+See `GUIDE_ROOT.md` and `PROJECT_OVERVIEW.md` for the architecture and data
+flow. The “Important Assumptions” section in `PROJECT_OVERVIEW.md` covers
+adjusted prices, time zones, and the one-row-per-bar assumption.
 
 ## Requirements
 
 - Python 3.13.
-- ClickHouse, only if `run.source = "clickhouse"`. Set these in `.env` (see
-  `.env.example`): `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_USER`,
-  `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_SECURE`, `CLICKHOUSE_VERIFY`.
-- No external service is needed for `run.source = "csv"`.
+- ClickHouse only when `run.source = "clickhouse"`. Set these values in `.env`
+  (see `.env.example`): `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`,
+  `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_SECURE`, and
+  `CLICKHOUSE_VERIFY`.
+- No external service is needed when `run.source = "csv"`.
 
 ## Setup
 
@@ -50,25 +51,42 @@ uv sync
 ## Usage
 
 ```bash
-uv run python run.py --config config.toml   # database or CSV run, via run.py
-uv run feature-pipeline --config config.toml  # same thing, installed script
-uv run pytest -q                              # run the test suite
+uv run python run.py --config config.toml   # database or CSV run
+uv run feature-pipeline --config config.toml
+uv run pytest -q
 ```
 
-As a library, without file I/O:
+As a library, you can use the stages without writing files:
 
 ```python
-from feature_engineering import clean_ohlcv, compute_features, evaluate_features, load_features
+from feature_engineering import (
+    clean_ohlcv,
+    compute_features,
+    evaluate_features,
+    load_features,
+    target_column_names,
+)
 
 cleaned, report = clean_ohlcv(raw_ohlcv_frame)
 features = compute_features(cleaned, config_dict)
-table = evaluate_features(features, "next_20bar_realized_volatility", target_horizon_bars=20)
+table = evaluate_features(
+    features,
+    "next_20bar_realized_volatility",
+    # Keep every forward-looking column out of the candidate feature set.
+    target_columns=target_column_names(config_dict),
+    target_horizon_bars=20,
+)
 
-stored = load_features("outputs/stocks")  # pull the newest stored run back
+stored = load_features("outputs/stocks")  # load the newest stored run
 ```
 
-Every feature is also a plain pandas-style function. Call it directly with
-keyword parameters and no config file:
+If a run keeps its target columns, always pass `target_columns`. Otherwise
+`evaluate_features` may treat another future-based target as an ordinary
+feature. It can then rank highly because it overlaps the target being tested,
+not because it predicts anything.
+
+Each feature is also available as a function. Call it directly with keyword
+parameters; no config file is needed:
 
 ```python
 from feature_engineering.engineering.features import (
@@ -81,60 +99,58 @@ target = next_n_bar_return(frame, bars=5)
 session_vwap = vwap(frame)
 ```
 
-Each function expects one symbol's OHLCV frame sorted by time and returns a
-Series aligned with the frame's index. The config file is only needed for the
-command-line pipeline.
-
-
-`config_dict` is the plain dict shape produced by parsing `config.toml`. See
-the module docstring in `src/feature_engineering/__init__.py` for the full set
-of importable pieces (`validate_config`, `save_features`, plots, and the
-individual evaluation functions).
+Each function expects one symbol’s OHLCV frame sorted by time and returns a
+Series with the same index. `config.toml` is only needed for the command-line
+pipeline. `config_dict` is the plain dictionary produced by parsing that file.
+See the module docstring in `src/feature_engineering/__init__.py` for the full
+list of importable functions, including config validation, storage, plots, and
+individual evaluation functions.
 
 ## Configuration
 
 `config.toml` is the only configuration file:
 
-- `[run]`: `source` (`clickhouse` or `csv`), `symbols`, `start_date`,
-  `end_date`, `session` (`regular`, `extended`, `full`), `exchange_timezone`,
-  `output_formats`, `output_dir`.
-- `[data_quality]`: which invalid-row checks to apply.
-- `[features]`: `include_categories` / `exclude_categories` to run a feature
-  subset without editing Python, and `reset_by_session` so rolling windows and
-  forward targets do not cross the overnight gap on intraday bars.
-- `[[features.parameters]]`: one block per feature, naming its `function` and
-  parameters (for example `window`, `bars`, `fast`/`slow`/`signal`).
+- `[run]`: data source (`clickhouse` or `csv`), symbols, date range, session
+  (`regular`, `extended`, or `full`), exchange time zone, output formats, and
+  output directory.
+- `[data_quality]`: the invalid-row checks to apply.
+- `[features]`: feature categories to include or exclude, and whether rolling
+  windows and forward targets reset at each session. Resetting prevents
+  intraday calculations from crossing the overnight gap.
+- `[[features.parameters]]`: one block per feature, including its function,
+  output name, and parameters such as `window`, `bars`, `fast`, `slow`, and
+  `signal`.
 
 To add a feature, write its function in the matching category file under
 `src/feature_engineering/engineering/features/`, decorate it with
 `@register(...)`, and add a `[[features.parameters]]` entry.
 
-To rename a feature column or change its parameters, edit its
-`[[features.parameters]]` block. `name` sets the output column name; the other
-keys (`window`, `bars`, `fast`/`slow`/`signal`, ...) set the feature parameters.
+To rename a feature or change its parameters, edit that feature’s configuration
+block. `name` sets the output column name; the other keys set the feature’s
+parameters.
 
 ## Layout
 
 ```text
-run.py            entry point, delegates to feature_engineering.cli
+run.py            entry point; delegates to feature_engineering.cli
 config.toml       single run configuration
 src/feature_engineering/
-  engineering/    load, clean, compute, store/pull feature datasets
-    features/     feature formulas by category (returns, targets, trend,
-                  volatility, volume)
-  evaluation/     feature-versus-target testing and plots
+  engineering/    load, clean, compute, and store feature datasets
+    features/     feature formulas by category
+  evaluation/     feature-versus-target tests and plots
   config.py       config validation
-  cli.py          the load -> clean -> compute -> store workflow
+  cli.py          load -> clean -> compute -> store workflow
 tests/            pytest suite, including a toy CSV fixture
 ```
 
 ## Output
 
-The pipeline writes these files to `output_dir` (default `outputs/stocks/`):
+The pipeline writes these files to `output_dir` (default:
+`outputs/stocks/`):
 
-- `features_v{version}_{timestamp}.parquet` and/or `.csv` — the feature data.
-- `feature_catalog.csv` — feature names, categories, formulas, descriptions.
-- `run_summary_v{version}_{timestamp}.json` — config snapshot, rows per
-  symbol, and per-feature null counts and value ranges.
+- `features_v{version}_{timestamp}.parquet` and/or `.csv`: feature data.
+- `feature_catalog.csv`: feature names, categories, formulas, and descriptions.
+- `run_summary_v{version}_{timestamp}.json`: a config snapshot, row counts by
+  symbol, and null counts and value ranges for each feature.
 
 All rights reserved. See [LICENSE](LICENSE).

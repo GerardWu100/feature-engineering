@@ -70,6 +70,30 @@ def test_violin_by_quantile_builds_and_saves(frame: pd.DataFrame, tmp_path) -> N
     assert all(label.split("\n")[1].startswith("n=") for label in tick_labels)
 
 
+def _all_rows_legend_label(figure) -> str:
+    """Return the text of the dashed all-rows mean entry in a figure's legend."""
+    axis = figure.axes[0]
+    labels = [text.get_text() for text in axis.get_legend().get_texts()]
+    matches = [label for label in labels if label.startswith("all rows:")]
+    assert len(matches) == 1, labels
+    return matches[0]
+
+
+@pytest.mark.parametrize("plot", [violin_by_quantile, spread_rows_by_state])
+def test_all_rows_legend_follows_the_percent_flag(
+    frame: pd.DataFrame, plot
+) -> None:
+    """The legend must use the same units as the axis the flag formats."""
+    arguments = (
+        (frame, "signal", "fwd_return")
+        if plot is violin_by_quantile
+        else (frame, ["signal"], "fwd_return")
+    )
+
+    assert _all_rows_legend_label(plot(*arguments, percent=True)).endswith("%")
+    assert not _all_rows_legend_label(plot(*arguments, percent=False)).endswith("%")
+
+
 def test_violin_by_quantile_rejects_no_finite_pairs() -> None:
     """An empty finite sample should produce a clear analysis error."""
     frame = pd.DataFrame(

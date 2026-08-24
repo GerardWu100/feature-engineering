@@ -21,6 +21,19 @@ Data contract (assumptions every caller must satisfy)
    database column stored in UTC would select the wrong bars. The intraday
    ``reset_by_session`` option in ``compute.py`` likewise groups by the local
    calendar date.
+
+   ClickHouse loads check this contract after the fact:
+   ``_verify_session_contract`` re-applies the session window to the
+   normalized timestamps and raises if any returned bar sits outside it. That
+   catches the common failure, a column typed ``DateTime('UTC')`` or any other
+   non-exchange zone, because the conversion to exchange-local time then moves
+   the bars out of the window the query asked for.
+
+   It cannot catch a column typed as a plain naive ``DateTime`` whose values
+   are really UTC wall-clock. Nothing in the data distinguishes that case from
+   correctly stored exchange-local time, so it stays a contract the source
+   table must satisfy, not something this loader can prove. Confirm the column
+   type before trusting an intraday ClickHouse run.
 3. One row per symbol per bar, with consistent bar size across the run.
    Duplicate ``(symbol, timestamp)`` bars are rejected with an error because they
    would double-count rows inside every rolling window.
@@ -170,7 +183,9 @@ def _load_clickhouse(run_config: dict[str, Any]) -> pd.DataFrame:
     }
     result = client.query_df(query, parameters=query_parameters)
     exchange_timezone = run_config.get("exchange_timezone", DEFAULT_EXCHANGE_TIMEZONE)
-    return _finalize_ohlcv_frame(result, exchange_timezone=exchange_timezone)
+    loaded = _finalize_ohlcv_frame(result, exchange_timezone=exchange_timezone)
+    _verify_session_contract(loaded, session=session)
+    return loaded
 
 
 def _validated_symbols(symbols: list[Any]) -> list[str]:
@@ -249,6 +264,56 @@ def _session_mask(timestamps: pd.Series, session: str) -> pd.Series:
 
     minute_of_day = timestamps.dt.hour * 60 + timestamps.dt.minute
     return minute_of_day.between(minute_range[0], minute_range[1])
+
+
+def _verify_session_contract(frame: pd.DataFrame, *, session: str) -> None:
+    """Fail loudly when loaded bars fall outside the session that was queried.
+
+    The ClickHouse session filter runs in the database with ``toHour(ts)`` and
+    ``toMinute(ts)``, which read whatever wall-clock the column stores. This
+    package then converts every timestamp to exchange-local time. If the two
+    disagree - a column typed ``DateTime('UTC')``, for example - the query
+    keeps the wrong bars and the rest of the pipeline silently studies the
+    wrong part of the trading day. Re-checking the window after conversion
+    turns that into an error at load time.
+
+    Parameters
+    ----------
+    frame
+        Loader output with a naive exchange-local ``timestamp`` column.
+    session
+        Session key that was applied in SQL, from ``SESSION_MINUTE_RANGES``.
+
+    Raises
+    ------
+    ValueError
+        If any row falls outside the session's inclusive minute-of-day bounds.
+
+    Notes
+    -----
+    A plain naive ``DateTime`` column holding UTC values passes this check,
+    because the loader trusts naive input as already exchange-local and the
+    minute-of-day it re-derives is the same one the database filtered on. That
+    case can only be ruled out by checking the source table's column type.
+    """
+    minute_range = SESSION_MINUTE_RANGES[session]
+    if minute_range is None or frame.empty:
+        return
+
+    inside_session = _session_mask(frame["timestamp"], session)
+    if bool(inside_session.all()):
+        return
+
+    outside = frame.loc[~inside_session, "timestamp"]
+    raise ValueError(
+        f"{len(outside)} of {len(frame)} loaded bars fall outside the "
+        f"'{session}' session ({minute_range[0]} to {minute_range[1]} minutes "
+        f"after exchange-local midnight) once converted to exchange-local "
+        f"time; first offender {outside.iloc[0]}. The database column "
+        f"'{CLICKHOUSE_TIMESTAMP_COLUMN}' is most likely not stored in "
+        f"exchange-local time. Check its type, then set run.exchange_timezone "
+        f"to match or use session = \"full\" and filter afterwards."
+    )
 
 
 def _build_clickhouse_client_from_env() -> Any:

@@ -10,7 +10,10 @@ stored dataset back from disk.
 """
 
 from feature_engineering.engineering.clean import clean_ohlcv
-from feature_engineering.engineering.compute import compute_features
+from feature_engineering.engineering.compute import (
+    compute_features,
+    target_column_names,
+)
 from feature_engineering.engineering.load import load_ohlcv
 from feature_engineering.engineering.store import load_features, save_features
 
@@ -20,4 +23,5 @@ __all__ = [
     "load_features",
     "load_ohlcv",
     "save_features",
+    "target_column_names",
 ]

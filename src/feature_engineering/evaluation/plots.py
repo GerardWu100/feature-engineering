@@ -58,6 +58,12 @@ STATE_COLOURS = {
 
 FIGURE_DPI = 200
 
+# Number formats for the "all rows" legend entry. Percent mode shows two
+# decimals of a whole percent (0.0123 -> "1.23%"); raw mode shows four
+# significant digits so both price-unit and volatility targets stay readable.
+UNCONDITIONAL_PERCENT_DECIMALS = 2
+UNCONDITIONAL_RAW_SIGNIFICANT_DIGITS = 4
+
 
 def _target_colour(target: str) -> str:
     """Return green for volatility targets, blue otherwise.
@@ -77,6 +83,36 @@ def _percent_axis(axis: plt.Axes, which: str = "y") -> None:
         axis.yaxis.set_major_formatter(formatter)
     else:
         axis.xaxis.set_major_formatter(formatter)
+
+
+def _unconditional_mean_label(value: float, *, percent: bool) -> str:
+    """Return the legend label for the dashed all-rows mean line.
+
+    The plot's ``percent`` flag decides how the target axis is formatted, so
+    the legend must follow the same choice. Formatting this number as a
+    percent while the axis shows raw units (or the reverse) makes the dashed
+    line look like it sits somewhere it does not.
+
+    Parameters
+    ----------
+    value
+        Unconditional mean of the target over every plotted row, in the
+        target's own units (decimal return, price units, and so on).
+    percent
+        Same flag the caller passed to the plot. ``True`` formats the value as
+        a whole percent, ``False`` leaves it in raw target units.
+
+    Returns
+    -------
+    str
+        ``"all rows: 1.23%"`` when ``percent`` is true, otherwise
+        ``"all rows: 0.01234"`` in raw target units.
+    """
+    if percent:
+        return (
+            f"all rows: {value * 100.0:.{UNCONDITIONAL_PERCENT_DECIMALS}f}%"
+        )
+    return f"all rows: {value:.{UNCONDITIONAL_RAW_SIGNIFICANT_DIGITS}g}"
 
 
 def _tidy_spines(axis: plt.Axes) -> None:
@@ -209,7 +245,7 @@ def violin_by_quantile(
             color=RULE_COLOUR,
             linestyle="--",
             linewidth=1.4,
-            label=f"all rows: {unconditional * 100.0:.2f}%",
+            label=_unconditional_mean_label(unconditional, percent=percent),
         ),
     ]
     panel.legend(handles=handles, loc="best", fontsize=9, framealpha=0.93)
@@ -395,7 +431,7 @@ def spread_rows_by_state(
             color=RULE_COLOUR,
             linestyle="--",
             linewidth=1.4,
-            label=f"all rows: {unconditional * 100.0:.2f}%",
+            label=_unconditional_mean_label(unconditional, percent=percent),
         ),
     ]
     panel.legend(handles=handles, loc="lower right", fontsize=9, framealpha=0.93)
