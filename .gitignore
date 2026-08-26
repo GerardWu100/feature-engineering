@@ -48,6 +48,8 @@ secrets.toml
 
 # Editor, OS, and tool caches
 .DS_Store
+._*
+__MACOSX/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -55,3 +57,9 @@ secrets.toml
 .vscode/
 .idea/
 *.log
+
+# Obsidian vault state. Markdown notes stay tracked.
+.obsidian/
+.obsidian-*/
+.obsidian.vimrc
+.trash/
