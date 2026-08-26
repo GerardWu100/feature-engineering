@@ -152,5 +152,3 @@ The pipeline writes these files to `output_dir` (default:
 - `feature_catalog.csv`: feature names, categories, formulas, and descriptions.
 - `run_summary_v{version}_{timestamp}.json`: a config snapshot, row counts by
   symbol, and null counts and value ranges for each feature.
-
-All rights reserved. See [LICENSE](LICENSE).
