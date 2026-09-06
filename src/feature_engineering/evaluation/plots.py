@@ -109,9 +109,7 @@ def _unconditional_mean_label(value: float, *, percent: bool) -> str:
         ``"all rows: 0.01234"`` in raw target units.
     """
     if percent:
-        return (
-            f"all rows: {value * 100.0:.{UNCONDITIONAL_PERCENT_DECIMALS}f}%"
-        )
+        return f"all rows: {value * 100.0:.{UNCONDITIONAL_PERCENT_DECIMALS}f}%"
     return f"all rows: {value:.{UNCONDITIONAL_RAW_SIGNIFICANT_DIGITS}g}"
 
 

@@ -90,11 +90,14 @@ parameters; no config file is needed:
 
 ```python
 from feature_engineering.engineering.features import (
-    moving_average, relative_strength_index, vwap, next_n_bar_return,
+    moving_average,
+    relative_strength_index,
+    vwap,
+    next_n_bar_return,
 )
 
 ma20 = moving_average(frame, window=20)
-rsi = relative_strength_index(frame)          # default window=14
+rsi = relative_strength_index(frame)  # default window=14
 target = next_n_bar_return(frame, bars=5)
 session_vwap = vwap(frame)
 ```

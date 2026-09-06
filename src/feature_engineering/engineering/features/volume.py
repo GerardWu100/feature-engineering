@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import (
+    as_feature_column,
+    register,
+)
 
 # Default rolling window (in rows) for the relative-volume average.
 DEFAULT_VOLUME_RATIO_WINDOW = 20

@@ -10,7 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import as_feature_column, register
+from feature_engineering.engineering.features.registry import (
+    as_feature_column,
+    register,
+)
 
 
 @register(

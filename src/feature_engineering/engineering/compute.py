@@ -7,12 +7,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import REGISTRY, FeatureSpec
 from feature_engineering.engineering.constants import (
-    IDENTIFIER_COLUMNS,
     IDENTIFIER_COLUMN_SET,
+    IDENTIFIER_COLUMNS,
     sort_by_symbol_and_time,
 )
+from feature_engineering.engineering.features.registry import REGISTRY, FeatureSpec
 
 RESERVED_FEATURE_KEYS = {"name", "function", "enabled"}
 

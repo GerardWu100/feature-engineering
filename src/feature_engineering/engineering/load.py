@@ -312,7 +312,7 @@ def _verify_session_contract(frame: pd.DataFrame, *, session: str) -> None:
         f"time; first offender {outside.iloc[0]}. The database column "
         f"'{CLICKHOUSE_TIMESTAMP_COLUMN}' is most likely not stored in "
         f"exchange-local time. Check its type, then set run.exchange_timezone "
-        f"to match or use session = \"full\" and filter afterwards."
+        f'to match or use session = "full" and filter afterwards.'
     )
 
 

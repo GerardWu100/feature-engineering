@@ -29,8 +29,8 @@ and ``validate_config`` to check a config before use.
 """
 
 from feature_engineering.cli import run_pipeline
-from feature_engineering.engineering import features
 from feature_engineering.config import validate_config
+from feature_engineering.engineering import features
 from feature_engineering.engineering.clean import clean_ohlcv
 from feature_engineering.engineering.compute import (
     compute_features,

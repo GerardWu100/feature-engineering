@@ -80,9 +80,7 @@ def _all_rows_legend_label(figure) -> str:
 
 
 @pytest.mark.parametrize("plot", [violin_by_quantile, spread_rows_by_state])
-def test_all_rows_legend_follows_the_percent_flag(
-    frame: pd.DataFrame, plot
-) -> None:
+def test_all_rows_legend_follows_the_percent_flag(frame: pd.DataFrame, plot) -> None:
     """The legend must use the same units as the axis the flag formats."""
     arguments = (
         (frame, "signal", "fwd_return")

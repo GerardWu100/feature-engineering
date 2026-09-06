@@ -14,9 +14,9 @@ from typing import Any
 
 import pandas as pd
 
-from feature_engineering.engineering.features.registry import REGISTRY
-from feature_engineering.engineering.constants import IDENTIFIER_COLUMN_SET
 from feature_engineering.engineering.compute import selected_feature_configs
+from feature_engineering.engineering.constants import IDENTIFIER_COLUMN_SET
+from feature_engineering.engineering.features.registry import REGISTRY
 
 
 def save_features(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Path]:
@@ -113,9 +113,7 @@ def load_features(
     pattern = f"{run_stem or 'features_v*'}.{file_format}"
     candidates = sorted(directory.glob(pattern))
     if not candidates:
-        raise FileNotFoundError(
-            f"No feature file matching '{pattern}' in {directory}."
-        )
+        raise FileNotFoundError(f"No feature file matching '{pattern}' in {directory}.")
 
     # The filename stem ends with a zero-padded UTC timestamp, so the largest
     # sorted name is the most recent run.

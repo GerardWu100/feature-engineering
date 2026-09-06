@@ -7,7 +7,10 @@ from typing import Any
 
 import pandas as pd
 
-from feature_engineering.engineering.constants import NUMERIC_OHLCV_COLUMNS, PRICE_COLUMNS
+from feature_engineering.engineering.constants import (
+    NUMERIC_OHLCV_COLUMNS,
+    PRICE_COLUMNS,
+)
 
 
 def clean_ohlcv(
