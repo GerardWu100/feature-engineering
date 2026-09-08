@@ -26,11 +26,16 @@ REQUIRED_RUN_KEYS = {"output_dir", "output_formats", "source"}
 POSITIVE_INTEGER_FEATURE_PARAMS = {
     "bars",
     "fast",
+    "max_bars",
     "periods",
     "signal",
     "slow",
+    "volatility_window",
     "window",
 }
+# Feature parameters that must be numbers strictly greater than zero, such as
+# barrier widths expressed as multiples of volatility.
+POSITIVE_NUMBER_FEATURE_PARAMS = {"lower_multiple", "upper_multiple"}
 SUPPORTED_DATA_QUALITY_OPTIONS = {
     "drop_high_lt_low",
     "drop_missing_numeric_values",
@@ -43,6 +48,9 @@ FEATURE_PARAMETER_MINIMUMS = {
     "next_n_bar_realized_volatility": {"bars": 2},
     "relative_strength_index": {"window": 2},
     "rolling_standard_deviation": {"window": 3},
+    "triple_barrier_bars_to_exit": {"volatility_window": 3},
+    "triple_barrier_exit_return": {"volatility_window": 3},
+    "triple_barrier_label": {"volatility_window": 3},
 }
 
 
@@ -383,12 +391,23 @@ def _validate_feature_item(feature_item: dict[str, Any], index: int) -> None:
                 minimum=minimum,
             )
 
+    for parameter_name in POSITIVE_NUMBER_FEATURE_PARAMS & configured_parameters:
+        _validate_positive_number(
+            feature_item[parameter_name], label=f"{label}.{parameter_name}"
+        )
+
     if function_name.startswith("macd_"):
         parameters = inspect.signature(spec.function).parameters
         fast = feature_item.get("fast", parameters["fast"].default)
         slow = feature_item.get("slow", parameters["slow"].default)
         if fast >= slow:
             raise ConfigValidationError(f"{label}.fast must be less than slow.")
+
+
+def _validate_positive_number(value: Any, *, label: str) -> None:
+    """Validate a feature parameter that must be a number greater than zero."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+        raise ConfigValidationError(f"{label} must be a number > 0.")
 
 
 def _validate_positive_integer(value: Any, *, label: str, minimum: int = 1) -> None:

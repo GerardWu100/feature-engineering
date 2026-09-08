@@ -32,7 +32,7 @@ and inspect.
 | Category | Meaning | Examples |
 |---|---|---|
 | `returns` | Price change over time. | `log_return`, `simple_return` |
-| `target` | Forward-looking labels for model training. | `next_n_bar_return`, `next_n_bar_realized_volatility` |
+| `target` | Forward-looking labels for model training. | `next_n_bar_return`, `next_n_bar_realized_volatility`, `triple_barrier_label`, `triple_barrier_bars_to_exit`, `triple_barrier_exit_return` |
 | `trend` | Direction or momentum. | `moving_average`, `price_vs_moving_average`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram` |
 | `volatility` | Size and instability of price movement. | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range` |
 | `volume` | Trading activity and participation. | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap` |

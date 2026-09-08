@@ -100,6 +100,42 @@ bars = 20
 enabled = true
 
 [[features.parameters]]
+name = "triple_barrier_label_20"
+function = "triple_barrier_label"
+# Time barrier in bars: the position is force-closed after this many rows.
+# max_bars and the multiples define both the label and a risk preference;
+# tuning them on validation accuracy silently picks a risk preference.
+max_bars = 20
+# Take-profit and stop-loss widths as multiples of trailing volatility
+# (sigma_t = rolling standard deviation of log returns over volatility_window
+# prices). +1 = take-profit hit first, -1 = stop hit first, 0 = time barrier.
+upper_multiple = 2.0
+lower_multiple = 2.0
+volatility_window = 20
+enabled = true
+
+[[features.parameters]]
+name = "triple_barrier_bars_to_exit_20"
+function = "triple_barrier_bars_to_exit"
+# Bars from entry to exit under the same barriers; equals max_bars when the
+# time barrier closes the trade (a censored, lower-bound holding time).
+max_bars = 20
+upper_multiple = 2.0
+lower_multiple = 2.0
+volatility_window = 20
+enabled = true
+
+[[features.parameters]]
+name = "triple_barrier_exit_return_20"
+function = "triple_barrier_exit_return"
+# Simple return from the entry close to the close of the exit bar.
+max_bars = 20
+upper_multiple = 2.0
+lower_multiple = 2.0
+volatility_window = 20
+enabled = true
+
+[[features.parameters]]
 name = "moving_average_20"
 function = "moving_average"
 window = 20

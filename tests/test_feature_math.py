@@ -14,6 +14,10 @@ from feature_engineering.engineering.features.returns import (
 from feature_engineering.engineering.features.targets import (
     next_n_bar_realized_volatility,
     next_n_bar_return,
+    scan_triple_barrier,
+    triple_barrier_bars_to_exit,
+    triple_barrier_exit_return,
+    triple_barrier_label,
 )
 from feature_engineering.engineering.features.trend import (
     moving_average,
@@ -187,3 +191,108 @@ def test_volume_features_match_manual_formulas() -> None:
     assert math.isclose(ratio_values.iloc[2], 1800.0 / expected_mean_volume)
     assert math.isclose(dollar_values.iloc[2], 103.0 * 1800.0)
     assert math.isclose(change_values.iloc[1], 1200.0 / 1000.0 - 1.0)
+
+
+def _triple_barrier_frame(closes: list[float]) -> pd.DataFrame:
+    """Build a single-symbol frame whose only meaningful column is close."""
+    timestamps = pd.date_range("2024-01-02", periods=len(closes), freq="D")
+    close = pd.Series(closes, dtype="float64")
+    return pd.DataFrame(
+        {
+            "symbol": ["AAPL"] * len(closes),
+            "timestamp": timestamps,
+            "open": close,
+            "high": close + 1.0,
+            "low": close - 1.0,
+            "close": close,
+            "volume": [1000.0] * len(closes),
+        }
+    )
+
+
+def test_triple_barrier_label_first_touch_within_time_barrier() -> None:
+    """Label, bars-to-exit, and exit return must agree on the first barrier hit."""
+    # Three warm-up prices give sigma at row 2 from returns ln(101/100) and
+    # ln(100/101). From row 2 (close 100) the path is 101, 103, 104, 97, 100, 100.
+    closes = [100.0, 101.0, 100.0, 101.0, 103.0, 104.0, 97.0, 100.0, 100.0]
+    frame = _triple_barrier_frame(closes)
+    sigma_row2 = float(
+        pd.Series([math.log(101.0 / 100.0), math.log(100.0 / 101.0)]).std()
+    )
+    # Barrier width 2 * sigma is about 2.8%: 101 (+1.0%) misses, 103 (+3.0%)
+    # hits the upper barrier at step 2.
+    assert 0.02 < 2.0 * sigma_row2 < 0.03
+
+    outcome = scan_triple_barrier(
+        frame, max_bars=3, upper_multiple=2.0, lower_multiple=2.0, volatility_window=3
+    )
+
+    assert pd.isna(outcome.label.iloc[0]) and pd.isna(outcome.label.iloc[1])
+    assert outcome.label.iloc[2] == 1.0
+    assert outcome.bars_to_exit.iloc[2] == 2.0
+    assert math.isclose(outcome.exit_return.iloc[2], 103.0 / 100.0 - 1.0)
+
+    # Row 5 (close 104): next closes 97, 100, 100. 97 is -6.7%, a stop hit at
+    # step 1 regardless of the later recovery.
+    assert outcome.label.iloc[5] == -1.0
+    assert outcome.bars_to_exit.iloc[5] == 1.0
+    assert math.isclose(outcome.exit_return.iloc[5], 97.0 / 104.0 - 1.0)
+
+    # The last max_bars rows have no full window and stay NaN in every output.
+    for position in (6, 7, 8):
+        assert pd.isna(outcome.label.iloc[position])
+        assert pd.isna(outcome.bars_to_exit.iloc[position])
+        assert pd.isna(outcome.exit_return.iloc[position])
+
+
+def test_triple_barrier_label_is_zero_when_no_barrier_is_reached() -> None:
+    """A quiet path inside both barriers exits at the time barrier with label 0."""
+    # Sigma at row 2 comes from +5% then -4.8% returns, so 2 * sigma is far
+    # wider than the later 0.1% moves.
+    closes = [100.0, 105.0, 100.0, 100.1, 100.2, 100.1, 100.3, 100.2]
+    frame = _triple_barrier_frame(closes)
+
+    outcome = scan_triple_barrier(
+        frame, max_bars=3, upper_multiple=2.0, lower_multiple=2.0, volatility_window=3
+    )
+
+    assert outcome.label.iloc[2] == 0.0
+    assert outcome.bars_to_exit.iloc[2] == 3.0
+    assert math.isclose(outcome.exit_return.iloc[2], 100.1 / 100.0 - 1.0)
+
+    # Registered wrappers return the matching column of the same scan.
+    label = triple_barrier_label(frame, max_bars=3, volatility_window=3)
+    bars = triple_barrier_bars_to_exit(frame, max_bars=3, volatility_window=3)
+    exit_return = triple_barrier_exit_return(frame, max_bars=3, volatility_window=3)
+    pd.testing.assert_series_equal(label, outcome.label)
+    pd.testing.assert_series_equal(bars, outcome.bars_to_exit)
+    pd.testing.assert_series_equal(exit_return, outcome.exit_return)
+
+
+def test_triple_barrier_label_ignores_bars_after_the_first_touch() -> None:
+    """Changing closes beyond the first touch must not change the label."""
+    base = [100.0, 101.0, 100.0, 101.0, 103.0, 104.0, 97.0, 100.0, 100.0]
+    perturbed = base.copy()
+    perturbed[5] = 50.0  # after row 2's touch at step 2 (index 4)
+
+    base_label = triple_barrier_label(
+        _triple_barrier_frame(base), max_bars=3, volatility_window=3
+    )
+    perturbed_label = triple_barrier_label(
+        _triple_barrier_frame(perturbed), max_bars=3, volatility_window=3
+    )
+    assert base_label.iloc[2] == perturbed_label.iloc[2] == 1.0
+
+
+def test_triple_barrier_rejects_invalid_parameters_and_flat_volatility() -> None:
+    """Parameter guards fire, and a zero-volatility row is undefined (NaN)."""
+    frame = _triple_barrier_frame([100.0] * 6)
+    with pytest.raises(ValueError):
+        triple_barrier_label(frame, max_bars=0)
+    with pytest.raises(ValueError):
+        triple_barrier_label(frame, upper_multiple=0.0)
+    with pytest.raises(ValueError):
+        triple_barrier_label(frame, volatility_window=2)
+
+    flat = triple_barrier_label(frame, max_bars=1, volatility_window=3)
+    assert flat.isna().all()

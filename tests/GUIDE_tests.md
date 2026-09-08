@@ -37,3 +37,4 @@ uv run pytest -q
 - 2026-08-10: Added `test_evaluation.py` (IC, Newey-West regression, quantile buckets on synthetic known-relationship data) and `test_evaluation_plots.py` (figure smoke tests), plus forward realized-volatility target math in `test_feature_math.py`.
 - 2026-08-15: Removed `test_engines.py` together with the `engine/` subpackage; added a `load_features` round-trip test.
 - 2026-08-19: Added edge-case coverage for missing timestamps, unsafe feature names, misspelled settings, invalid spans and regression lags, insufficient volatility windows, and empty finite plot samples.
+- 2026-09-08: Added hand-checkable triple-barrier tests in `test_feature_math.py` (first touch, time-barrier zero, first-touch invariance to later bars, guards and flat-volatility NaN) and barrier-parameter validation cases in `test_config_validation.py`.

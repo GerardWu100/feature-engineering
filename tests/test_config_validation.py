@@ -197,3 +197,45 @@ def test_validate_config_rejects_clickhouse_without_symbols() -> None:
 
     with pytest.raises(ConfigValidationError, match="run.symbols"):
         validate_config(config)
+
+
+def _triple_barrier_item(**overrides: object) -> dict[str, object]:
+    item: dict[str, object] = {
+        "name": "triple_barrier_label_5",
+        "function": "triple_barrier_label",
+        "max_bars": 5,
+        "upper_multiple": 2.0,
+        "lower_multiple": 1.5,
+        "volatility_window": 10,
+        "enabled": True,
+    }
+    item.update(overrides)
+    return item
+
+
+def test_validate_config_accepts_triple_barrier_parameters() -> None:
+    """Integer barriers and positive float multiples pass validation."""
+    config = _valid_csv_config()
+    config["features"]["parameters"].append(_triple_barrier_item())
+
+    validate_config(config)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_message"),
+    [
+        ({"max_bars": 0}, "max_bars must be an integer >= 1"),
+        ({"volatility_window": 2}, "volatility_window must be an integer >= 3"),
+        ({"upper_multiple": 0}, "upper_multiple must be a number > 0"),
+        ({"lower_multiple": "wide"}, "lower_multiple must be a number > 0"),
+    ],
+)
+def test_validate_config_rejects_bad_triple_barrier_parameters(
+    overrides: dict[str, object], expected_message: str
+) -> None:
+    """Barrier widths and windows must be positive, and the window at least 3."""
+    config = _valid_csv_config()
+    config["features"]["parameters"].append(_triple_barrier_item(**overrides))
+
+    with pytest.raises(ConfigValidationError, match=expected_message):
+        validate_config(config)

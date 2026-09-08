@@ -23,6 +23,13 @@ The pipeline can:
   strength index (RSI), and moving average convergence divergence (MACD). The
   feature names and parameters come from `config.toml`, so you can change them
   without editing Python code.
+- Label outcomes two ways. Fixed-horizon targets (`next_n_bar_return`,
+  `next_n_bar_realized_volatility`) assume a position held for exactly N bars.
+  Triple-barrier targets (`triple_barrier_label`, `triple_barrier_bars_to_exit`,
+  `triple_barrier_exit_return`) let the price path decide the holding period:
+  the position closes at a volatility-scaled take-profit, a stop-loss, or a
+  time limit, whichever comes first. See `docs/reference/` for the method and
+  its alternatives.
 - Store Parquet and/or CSV data, a `feature_catalog.csv`, and a `run_summary`
   JSON file for reproducibility. `load_features` reads a stored run back into a
   DataFrame.
@@ -100,6 +107,24 @@ ma20 = moving_average(frame, window=20)
 rsi = relative_strength_index(frame)  # default window=14
 target = next_n_bar_return(frame, bars=5)
 session_vwap = vwap(frame)
+```
+
+Triple-barrier targets share one scan; call it once when you need more than
+one output:
+
+```python
+from feature_engineering.engineering.features.targets import scan_triple_barrier
+
+outcome = scan_triple_barrier(frame, max_bars=20, upper_multiple=2.0, lower_multiple=2.0)
+outcome.label          # +1 take-profit first, -1 stop first, 0 time barrier, NaN undefined
+outcome.bars_to_exit   # bars held; equals max_bars when the time barrier closes the trade
+outcome.exit_return    # close at exit / close at entry - 1
+
+table = evaluate_features(
+    features, "triple_barrier_label_20",
+    target_columns=target_column_names(config_dict),
+    target_horizon_bars=20,  # always max_bars: a label can depend on closes up to max_bars ahead
+)
 ```
 
 Each function expects one symbol’s OHLCV frame sorted by time and returns a

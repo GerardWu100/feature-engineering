@@ -54,13 +54,44 @@ The backward-looking `rolling_standard_deviation` uses a window measured in
 prices. Its minimum is 3 prices, which form 2 returns; one return cannot have a
 sample standard deviation.
 
+The two targets above fix the holding period in advance. The triple-barrier
+targets (Lopez de Prado, *Advances in Financial Machine Learning*, chapter 3)
+let the price path decide it. A position opened at the close of bar $t$ is
+closed by the first of three exits: a take-profit at $+u\,\sigma_t$, a
+stop-loss at $-d\,\sigma_t$, or a time limit of $H$ bars. Here $\sigma_t$ is
+the trailing sample standard deviation of one-bar log returns over
+`volatility_window` prices ending at $t$ (identical to
+`rolling_standard_deviation`), $u$ is `upper_multiple`, $d$ is
+`lower_multiple`, and $H$ is `max_bars`. With $r_{t,k} = C_{t+k}/C_t - 1$:
+
+$$
+k^{\ast} = \min\{\,k \in 1..H : r_{t,k} \ge u\,\sigma_t \ \text{or}\ r_{t,k} \le -d\,\sigma_t\,\}
+$$
+
+One scan (`scan_triple_barrier`) produces three registered columns:
+
+| Function | Value | Reads as |
+|---|---|---|
+| `triple_barrier_label` | $+1$ upper first, $-1$ lower first, $0$ no barrier within $H$ | Which exit ended the trade. |
+| `triple_barrier_bars_to_exit` | $k^{\ast}$, or $H$ when censored | How long the trade lasted; $H$ is a lower bound, not an observed exit. |
+| `triple_barrier_exit_return` | $r_{t,k^{\ast}}$, or $r_{t,H}$ | What the rule would have booked. |
+
+Barriers are tested on closes, so a stop can be passed intrabar and only
+register at the close; that makes stop outcomes slightly optimistic on daily
+bars. A row is `NaN` when $\sigma_t$ is undefined or zero, or when fewer than
+$H$ future bars exist in the group. The tail rule keeps one definition for
+every labelled row: labelling only the early hits in the last $H$ rows would
+bias that tail toward $\pm 1$. When screening, set
+`evaluate_features(..., target_horizon_bars=max_bars)`; the label can depend
+on closes up to $H$ bars ahead, so neighbouring rows overlap up to $H-1$ lags.
+
 ## Part 2 - Code Reference
 
 | File | Key contents |
 |---|---|
 | `registry.py` | `FeatureSpec`, `REGISTRY`, `register`, and `as_feature_column`. |
 | `returns.py` | `log_return`, `simple_return`. |
-| `targets.py` | `next_n_bar_return`, `next_n_bar_realized_volatility`. |
+| `targets.py` | `next_n_bar_return`, `next_n_bar_realized_volatility`, `scan_triple_barrier`, `triple_barrier_label`, `triple_barrier_bars_to_exit`, `triple_barrier_exit_return`. |
 | `trend.py` | `moving_average`, `price_vs_moving_average`, `rate_of_change`, `relative_strength_index`, `macd_line`, `macd_signal`, `macd_histogram`. |
 | `volatility.py` | `rolling_standard_deviation`, `bar_range_percent`, `average_true_range`. |
 | `volume.py` | `volume_ratio`, `dollar_volume`, `volume_change`, `vwap`, `price_vs_vwap`. |
@@ -87,3 +118,4 @@ with `@register(...)`.
 - 2026-08-15: Moved the forward-looking targets out of `returns.py` into their own `targets.py` so the category files match the config categories one-to-one.
 - 2026-08-15: Replaced the `(frame, parameters_dict)` feature signature with plain keyword arguments (`moving_average(frame, window=20)`), so features are directly callable pandas-style; the pipeline unpacks config parameters into the same keyword calls. Features whose one parameter used to be required (`moving_average`, `rolling_standard_deviation`, `volume_ratio`) now default to a 20-row window.
 - 2026-08-19: Hardened feature boundaries: reserved and duplicate output names are rejected, Moving Average Convergence/Divergence spans are validated, and rolling sample volatility requires enough prices to form two returns.
+- 2026-09-08: Added the triple-barrier targets (`triple_barrier_label`, `triple_barrier_bars_to_exit`, `triple_barrier_exit_return`) on top of one shared `scan_triple_barrier`. Barriers are multiples of the trailing `rolling_standard_deviation`, tested on closes; the last `max_bars` rows of each group are `NaN` so the tail is not biased toward early hits. `config.py` now validates `max_bars`, `volatility_window` (minimum 3), and the positive float multiples.
